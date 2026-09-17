@@ -45,7 +45,7 @@
 ## 下载与运行
 
 1. 打开 [v1.0.0 Release](https://github.com/dokibeartwo/cat-dog-diary/releases/tag/v1.0.0)。
-2. 下载 `猫狗日记-1.0.0-windows-x64.zip`。
+2. 下载 `cat-dog-diary-1.0.0-windows-x64.zip`。
 3. 完整解压 ZIP，再运行 `猫狗日记-windows-x64/猫狗日记.exe`。
 
 请不要只复制 EXE，也不要直接在压缩包内部运行。关闭主窗口后程序会进入系统托盘；彻底退出请使用托盘菜单“退出”。
