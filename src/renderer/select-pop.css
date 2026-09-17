@@ -1,0 +1,18 @@
+/* Shared with the existing main-window themed selector. */
+.select-pop{position:fixed;z-index:120;min-width:96px;max-height:280px;overflow-y:auto;overscroll-behavior:contain;padding:6px;border:1px solid var(--line,rgba(68,48,92,.18));border-radius:16px;background:var(--paper,#fff7d4);color:var(--ink,#2b2240);box-shadow:0 18px 48px #18102045;user-select:none;scrollbar-width:thin}
+.select-pop[hidden]{display:none}
+.select-pop__option{border-radius:10px;min-height:44px;padding:10px 14px;line-height:1.5;cursor:pointer;color:var(--ink,#2b2240);font-weight:600;white-space:normal;overflow-wrap:anywhere}
+.select-pop__option.is-active{background:color-mix(in srgb,var(--violet,#7663cf) 15%,transparent)}
+.select-pop__option.is-selected{color:var(--select-selected-ink,#fff);background:var(--violet,#7663cf);font-weight:750}
+.select-pop__option.is-selected.is-active{background:color-mix(in srgb,var(--violet,#7663cf) 85%,black)}
+.select-pop__option.is-disabled{opacity:.5;cursor:not-allowed}
+#snoozeField{font-size:18px;gap:10px;border:1px solid #ffffff35;background:#ffffff12;border-radius:16px;padding:6px 8px 6px 16px;min-height:60px}
+#snoozeMinutes{appearance:none;background-color:var(--paper,#fff7d4);color:var(--ink,#2b2240);border:1px solid var(--line,#d7cdec);border-radius:12px;padding:12px 36px 12px 14px;font-size:18px;font-weight:700;min-width:132px;min-height:46px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='m2 2 4 4 4-4' fill='none' stroke='%23594b71' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center;background-size:12px 8px;cursor:pointer}
+#snoozeMinutes:focus-visible{outline:3px solid var(--acid,#ffd85c);outline-offset:3px}
+.is-light #snoozeField{font-size:13px;padding:0;border:0;background:none;min-height:40px;gap:4px}
+.is-light #snoozeMinutes{font-size:14px;min-width:105px;min-height:40px;padding:8px 28px 8px 10px}
+.is-light .reminder-screen{background:var(--paper,#fff7d4);color:var(--ink,#2b2240)}
+.is-light h1,.is-light .reminder-brand strong{color:var(--ink,#2b2240)}
+.is-light h2,.is-light .detail{color:var(--ink-soft,#594572)}
+.is-light footer button{background:color-mix(in srgb,var(--violet,#7663cf) 12%,white);color:var(--ink,#2b2240);border-color:var(--line,#d7cdec)}
+.is-light footer .primary{background:var(--acid,#ffd85c)}

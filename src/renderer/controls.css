@@ -1,0 +1,70 @@
+/* Loaded after theme styles. Keep icon geometry explicit so background
+   shorthands elsewhere cannot accidentally tile the dropdown arrow again. */
+:root { --control-on-accent:#fff; }
+select { background-image:var(--control-arrow,var(--select-arrow-dark)) !important; background-repeat:no-repeat !important; background-position:right 12px center !important; background-size:12px 7px !important; padding-right:34px !important; }
+.stage-controls, .sidebar { --control-arrow:var(--select-arrow-light); }
+html:is([data-preview-family="matcha-roast"],[data-preview-family="soda-coast"],[data-preview-family="neon-sakura"]) .sidebar { --control-arrow:var(--select-arrow-dark); }
+.theme-number, .theme-temporal { position:relative; display:inline-flex !important; align-items:center; min-width:0; max-width:100%; gap:0 !important; vertical-align:middle; border:1px solid var(--line); border-radius:12px; background:color-mix(in srgb,var(--paper) 35%,white); color:var(--ink); }
+.theme-number { width:116px; }
+.theme-temporal { width:100%; }
+.theme-number input, .theme-temporal input { flex:1; min-width:0; width:100% !important; max-width:none !important; min-height:38px; height:auto; padding:8px 6px !important; border:0 !important; box-shadow:none !important; background:transparent !important; color:inherit !important; border-radius:10px; font-size:16px; outline:0; }
+.theme-number input { appearance:textfield; text-align:center !important; }
+.theme-number input::-webkit-inner-spin-button, .theme-number input::-webkit-outer-spin-button { appearance:none; margin:0; }
+.theme-temporal input::-webkit-calendar-picker-indicator { display:none !important; }
+.theme-temporal input { padding-left:12px !important; }
+.theme-number:focus-within, .theme-temporal:focus-within { outline:2px solid var(--violet); outline-offset:1px; }
+.number-step, .temporal-trigger { flex:0 0 30px; width:30px; min-width:30px; min-height:36px; height:100%; border:0; border-radius:9px; padding:0; display:grid; place-items:center; color:inherit; background:transparent; cursor:pointer; font:700 20px/1 inherit; font-size:20px; }
+.number-step:hover, .temporal-trigger:hover { background:color-mix(in srgb,var(--violet) 14%,transparent); }
+.number-step:disabled, .temporal-trigger:disabled { cursor:not-allowed; opacity:.45; }
+.temporal-trigger svg { width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round; }
+.theme-number.is-disabled, .theme-temporal.is-disabled { opacity:.65; }
+.stage-controls .theme-temporal { width:156px; color:var(--ink); background:color-mix(in srgb,var(--paper) 86%,white); }
+/* Keep the theme's filled button color, but not the action button's padding:
+   the calendar stays centered with a consistent right inset in every theme. */
+.stage-controls .theme-temporal .temporal-trigger { flex:0 0 32px; width:32px; min-width:32px; height:32px; min-height:32px; padding:0; margin-inline-end:6px; border:0; background:var(--acid); box-shadow:none; transform:none; color:var(--ink); }
+.stage-controls .theme-temporal .temporal-trigger:hover { background:color-mix(in srgb,var(--acid) 90%,var(--paper)); box-shadow:none; transform:none; }
+.stage-controls { flex-wrap:wrap; }
+.habit-schedule input[type=time] { width:100% !important; }
+.habit-schedule .theme-temporal { width:140px; }
+.habit-schedule .theme-number, .habit-form-schedule .theme-number { width:104px; }
+.habit-form-schedule { grid-template-columns:minmax(0,1fr); }
+.focus-duration { background:var(--paper) !important; border-color:var(--line) !important; color:var(--ink) !important; padding:0 8px !important; }
+.focus-duration .theme-number { width:100%; min-width:96px; flex:1; background:transparent; color:var(--ink); border-color:transparent; }
+.focus-duration > span:last-child { flex:0 0 auto; white-space:nowrap; }
+.focus-duration .theme-number input { font-size:20px; }
+.focus-duration .number-step { font-size:24px; }
+.add-task-dialog .theme-number, .edit-dialog .theme-number { width:100%; }
+.add-task-dialog .theme-number input, .add-task-dialog .theme-temporal input { min-height:48px; font-size:18px; }
+.add-task-dialog .number-with-unit { width:100%; }
+.add-task-dialog .number-with-unit .theme-number { width:170px; }
+.themed-picker { position:fixed; z-index:150; margin:0; box-sizing:border-box; overflow:auto; padding:16px; border:1px solid var(--line); border-radius:20px; background:var(--paper); color:var(--ink); box-shadow:0 18px 55px #24183135; font-family:inherit; font-size:16px; overscroll-behavior:contain; }
+.themed-picker[hidden] { display:none !important; }
+.themed-picker button { font-family:inherit; font-size:16px; font-weight:650; border:0; color:var(--ink); cursor:pointer; }
+.themed-picker button:disabled { opacity:.35; cursor:not-allowed; }
+.themed-picker button:focus-visible { outline:2px solid var(--ink);outline-offset:-2px; }
+.picker-heading { display:flex; align-items:center; justify-content:space-between; gap:3px; margin-bottom:12px; }
+.themed-picker .picker-nav { width:34px; height:36px; padding:0; font-size:28px; background:transparent; border-radius:10px; }
+.themed-picker .picker-year, .themed-picker .picker-month { border:1px solid var(--line); padding:5px !important; border-radius:8px; height:36px; min-height:0; background:#ffffff80; color:var(--ink); font-size:17px; text-align:center; }
+.themed-picker .picker-year { width:70px !important; }.themed-picker .picker-month { width:45px !important; }
+.calendar-weekdays, .calendar-days { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:3px; text-align:center; }
+.calendar-weekdays { color:var(--ink); margin:8px 0; font-size:15px; }
+.themed-picker .calendar-day { padding:0; height:36px; min-width:0; background:transparent; border-radius:10px; }
+.themed-picker .calendar-day.is-outside { color:color-mix(in srgb,var(--ink) 85%,var(--paper)); }
+.themed-picker .calendar-day.is-today { box-shadow:inset 0 0 0 1.5px var(--violet); }
+.themed-picker .calendar-day:hover:not(:disabled) { background:color-mix(in srgb,var(--violet) 14%,var(--paper)); }
+.themed-picker .calendar-day.is-selected { color:var(--control-on-accent); background:var(--violet); }
+.picker-footer { display:flex; align-items:center; gap:10px; justify-content:space-between; margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
+.themed-picker .picker-link { min-height:38px; padding:6px 8px; border-radius:10px; background:transparent; }
+.themed-picker .picker-confirm { min-height:40px; padding:8px 18px; border-radius:12px; background:var(--acid); }
+.picker-title { font-size:19px; }
+.themed-picker .picker-time-value { display:block; width:100%; margin:12px 0; padding:8px; border:1px solid var(--line); border-radius:12px; font:750 32px/1.2 'Segoe UI Variable',sans-serif; font-variant-numeric:tabular-nums; text-align:center; color:var(--ink); background:#ffffff55; }
+.time-columns { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.time-column > span { display:block; margin-bottom:8px; text-align:center; color:var(--ink); }
+.time-options { height:200px; overflow:auto; scrollbar-width:thin; overscroll-behavior:contain; }
+.themed-picker .time-option { display:block; height:40px; width:100%; border-radius:10px; background:transparent; }
+.themed-picker .time-option:hover, .themed-picker .time-option.is-selected { background:color-mix(in srgb,var(--violet) 25%,white); color:var(--ink); }
+.theme-temporal input::-webkit-datetime-edit-year-field:focus, .theme-temporal input::-webkit-datetime-edit-month-field:focus, .theme-temporal input::-webkit-datetime-edit-day-field:focus, .theme-temporal input::-webkit-datetime-edit-hour-field:focus, .theme-temporal input::-webkit-datetime-edit-minute-field:focus { background:var(--violet); color:var(--control-on-accent); border-radius:4px; }
+.time-options { scrollbar-color:color-mix(in srgb,var(--violet) 45%,transparent) transparent; }
+.themed-picker .time-option.is-selected { font-size:20px; font-weight:800; }
+.picker-error { color:#922b38; font-size:15px; margin:8px 0 0; }
+.picker-error:empty { display:none; }

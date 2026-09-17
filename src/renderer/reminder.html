@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>猫狗日记大屏提醒</title>
+    <link rel="stylesheet" href="reminder.css" />
+    <link rel="stylesheet" href="theme-previews.css" />
+    <link rel="stylesheet" href="select-pop.css" />
+    <link rel="preload" as="image" href="assets/screens/screen1.png" />
+    <link rel="preload" as="image" href="assets/screens/screen2.png" />
+    <link rel="preload" as="image" href="assets/screens/screen3.png" />
+    <link rel="preload" as="image" href="assets/screens/screen4.png" />
+  </head>
+  <body>
+    <main class="reminder-screen" id="reminderScreen" data-type="event">
+      <div class="screen-backdrop" id="screenBackdrop"></div>
+      <img class="screen-artwork" id="screenArtwork" alt="猫狗日记提醒屏保" />
+      <div class="screen-shade"></div>
+      <div class="glow glow-one"></div>
+      <div class="glow glow-two"></div>
+      <div class="grid"></div>
+      <header>
+        <div class="reminder-brand"><img src="assets/bear-authenticity.png" alt="王王碎小熊标识" /><strong>猫狗日记</strong><small>王王碎小熊</small></div>
+        <time id="currentTime">00:00</time>
+      </header>
+
+      <section class="alert-content">
+        <div class="signal" id="signalIcon">!</div>
+        <p class="kicker" id="reminderKicker">UP NEXT · 即将开始</p>
+        <h1 id="reminderTitle">准备下一件事</h1>
+        <h2 id="reminderSubtitle">还有 10 分钟开始</h2>
+        <p class="detail" id="reminderDetail">准备好资料，切换到这件事。</p>
+        <div class="due-pill" id="duePill" hidden><span>◷</span><strong id="dueTime"></strong></div>
+      </section>
+
+      <footer>
+        <button class="secondary" id="dismissButton">我知道了</button>
+        <label id="snoozeField">稍后 <select id="snoozeMinutes" aria-label="稍后提醒时间"><option value="5">5 分钟</option><option value="10" selected>10 分钟</option><option value="15">15 分钟</option><option value="30">30 分钟</option><option value="60">1 小时</option></select></label>
+        <button class="secondary" id="snoozeButton">稍后提醒</button>
+        <button class="primary" id="completeButton"><span>✓</span> 完成这件事</button>
+        <button class="primary" id="breakButton" hidden><span>☕</span> 开始 5 分钟休息</button>
+        <button class="primary" id="nextFocusButton" hidden>开始下一轮专注</button>
+        <button class="return-button" id="returnButton" hidden><span>✓</span> 我回来了</button>
+      </footer>
+      <p class="escape-tip">按 Esc 关闭提醒</p>
+    </main>
+    <script src="../shared/domain.js"></script>
+    <script src="select-pop.js"></script>
+    <script src="reminder.js"></script>
+  </body>
+</html>

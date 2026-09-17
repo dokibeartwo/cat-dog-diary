@@ -1,0 +1,33 @@
+{
+  "name": "cat-dog-diary",
+  "productName": "猫狗日记",
+  "version": "1.0.0",
+  "description": "猫狗日记：带专注反馈、阶段规划和桌面提醒的待办软件。",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-windows.ps1",
+    "qa:visual": "electron . --capture",
+    "test": "node --test tests/*.test.js",
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/renderer/app.js && node --check src/renderer/widget.js && node --check src/renderer/reminder.js && node --check src/renderer/focus.js && node --check src/shared/domain.js && node --check src/shared/runtime.js && node --check src/shared/productivity.js && node --check src/renderer/select-pop.js && node --check src/qa/productivity-qa.js && node --check src/renderer/themed-controls.js && node --check src/shared/controls.js && node --check src/qa/controls-widget-qa.js && node --check src/window-coordinator.js && node --check src/renderer/window-ready.js && node --check src/renderer/confirm-dialog.js && node --check src/qa/windows-stress.js"
+  },
+  "keywords": [
+    "todo",
+    "electron",
+    "desktop-widget"
+  ],
+  "author": "dokibeartwo",
+  "homepage": "https://github.com/dokibeartwo/cat-dog-diary#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dokibeartwo/cat-dog-diary.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dokibeartwo/cat-dog-diary/issues"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "44.4.1",
+    "rcedit": "5.0.2"
+  }
+}

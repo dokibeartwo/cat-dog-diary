@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>猫狗日记 — 把完成变成奖励</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="theme-previews.css" />
+    <link rel="stylesheet" href="controls.css" />
+    <link rel="stylesheet" href="confirm-dialog.css" />
+    <link rel="stylesheet" href="workbench.css" />
+    <link rel="stylesheet" href="select-pop.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-row drag-region">
+          <img class="brand-bear" src="assets/bear-authenticity.png" alt="王王碎小熊标识" />
+          <div>
+            <div class="brand-name">猫狗日记</div>
+            <div class="brand-tagline">王王碎小熊</div>
+            <div class="brand-tagline">CAT &amp; DOG DIARY</div>
+          </div>
+        </div>
+
+        <nav class="view-nav" aria-label="时间范围">
+          <button id="quickCaptureButton" class="quick-capture-button" type="button">＋ 随手记一件事</button>
+          <button class="nav-item is-active" data-view="today">
+            <span class="nav-icon">◉</span><span>今天</span><strong id="todayCount">0</strong>
+          </button>
+          <button class="nav-item" data-view="week">
+            <span class="nav-icon">▦</span><span>这一周</span><strong id="weekCount">0</strong>
+          </button>
+          <button class="nav-item" data-view="stage">
+            <span class="nav-icon">◇</span><span>阶段计划</span><strong id="stageCount">0</strong>
+          </button>
+          <button class="nav-item" data-view="backlog"><span class="nav-icon">▱</span><span>待安排</span><strong id="backlogCount">0</strong></button>
+          <button class="nav-item reminder-nav" data-view="reminders"><span class="nav-icon">♧</span><span>提醒中心</span><strong id="reminderCount">0</strong></button>
+        </nav>
+        <section class="category-nav" id="categoryNav" aria-label="任务分类"></section>
+
+        <section class="side-progress" aria-label="今日进度">
+          <div class="progress-copy">
+            <span>今日进度</span>
+            <strong id="sideProgressLabel">0 / 0</strong>
+          </div>
+          <div class="side-track"><span id="sideProgressBar"></span></div>
+          <p id="sideEncouragement">先写下一件最小的事。</p>
+        </section>
+
+        <div class="sidebar-spacer"></div>
+
+        <section class="sidebar-tools" id="sidebarTools" aria-label="主题与离席状态">
+          <button class="tool-launch" id="themeMenuButton" type="button" aria-expanded="false" aria-controls="themePopover">
+            <span class="tool-icon">◈</span>
+            <span><strong>切换主题</strong><small id="themeCurrentLabel">星糖梦境</small></span>
+            <b>⌃</b>
+          </button>
+          <div class="tool-popover theme-popover" id="themePopover" hidden>
+            <div class="popover-heading"><strong>选择今天的心情</strong><small>主程序与小组件会一起切换</small></div>
+            <div class="theme-grid" role="listbox" aria-label="主题背景">
+              <button type="button" data-theme-id="bg1" aria-label="星糖梦境"><span class="theme-thumb"></span><strong>星糖梦境</strong><i>✓</i></button>
+              <button type="button" data-theme-id="bg2" aria-label="晴空蜜桃"><span class="theme-thumb"></span><strong>晴空蜜桃</strong><i>✓</i></button>
+              <button type="button" data-theme-id="bg3" aria-label="莓果心动"><span class="theme-thumb"></span><strong>莓果心动</strong><i>✓</i></button>
+              <button type="button" data-theme-id="bg4" aria-label="奶杏布丁"><span class="theme-thumb"></span><strong>奶杏布丁</strong><i>✓</i></button>
+              <button type="button" data-theme-id="bg5" aria-label="青柠糖球"><span class="theme-thumb"></span><strong>青柠糖球</strong><i>✓</i></button>
+              <button type="button" data-theme-id="bg6" aria-label="蜜桃心语"><span class="theme-thumb"></span><strong>蜜桃心语</strong><i>✓</i></button>
+            </div>
+          </div>
+
+          <button class="tool-launch presence-launch" id="presenceMenuButton" type="button" aria-expanded="false" aria-controls="presencePopover">
+            <span class="tool-icon">…</span>
+            <span><strong>暂时离开</strong><small id="presenceCurrentLabel">让同事一眼看到状态</small></span>
+            <b>⌃</b>
+          </button>
+          <div class="tool-popover presence-popover" id="presencePopover" hidden>
+            <div class="popover-heading"><strong>暂时不在工位</strong><small>选择后立即进入全屏展示</small></div>
+            <div class="presence-grid">
+              <button type="button" data-presence-status="吃饭中"><span>🍚</span><strong>吃饭中</strong></button>
+              <button type="button" data-presence-status="开会中"><span>◷</span><strong>开会中</strong></button>
+              <button type="button" data-presence-status="上厕所"><span>WC</span><strong>上厕所</strong></button>
+              <button type="button" data-presence-status="有事暂离"><span>…</span><strong>有事暂离</strong></button>
+            </div>
+          </div>
+        </section>
+
+        <section class="preferences-panel">
+          <div class="preference-row">
+            <div><strong>桌面小组件</strong><small>始终浮在桌面上</small></div>
+            <button class="switch" id="widgetSwitch" role="switch" aria-checked="true"><span></span></button>
+          </div>
+          <div class="preference-row">
+            <div><strong>清单汇总通知</strong><small>不影响任务单独提醒</small></div>
+            <button class="switch" id="notificationSwitch" role="switch" aria-checked="true"><span></span></button>
+          </div>
+          <div class="preference-row">
+            <div><strong>开机自启动</strong><small id="startupStatus">正在读取系统状态</small></div>
+            <button class="switch" id="startupSwitch" type="button" role="switch" aria-label="开机自启动" aria-checked="false"><span></span></button>
+          </div>
+          <label class="reminder-frequency" for="reminderInterval">
+            提醒频率
+            <select id="reminderInterval">
+              <option value="15">每 15 分钟</option>
+              <option value="30">每 30 分钟</option>
+              <option value="60">每 1 小时</option>
+              <option value="120">每 2 小时</option>
+            </select>
+          </label>
+        </section>
+        <button id="settingsButton" class="settings-launch" type="button">⚙ 设置与备份 <small id="appVersion">1.0.0</small></button>
+      </aside>
+
+      <main class="main-content">
+        <div class="window-bar drag-region">
+          <span id="todayStamp"></span>
+          <button id="railToggle" type="button" class="ghost-button">每日坚持</button>
+        </div>
+
+        <div class="content-scroll">
+          <div id="windowErrorBanner" class="window-error-banner" role="alert" hidden><span id="windowErrorMessage"></span><button id="retryWindow" type="button">重新打开</button></div>
+          <header class="page-header">
+            <div>
+              <p class="eyebrow" id="eyebrow">YOUR FOCUS · TODAY</p>
+              <h1 id="viewTitle">今天，完成一点点。</h1>
+              <p class="view-subtitle" id="viewSubtitle">把注意力留给下一步，而不是所有步骤。</p>
+            </div>
+            <div class="progress-orbit" id="progressOrbit" style="--progress: 0">
+              <div><strong id="progressPercent">0%</strong><span>完成</span></div>
+            </div>
+          </header>
+          <section id="reminderCenter" hidden></section>
+
+          <section class="focus-panel" id="focusPanel">
+            <div class="focus-identity">
+              <span class="focus-icon">◎</span>
+              <div><small>FOCUS TIMER</small><strong>番茄专注钟</strong></div>
+            </div>
+            <div class="focus-modes">
+              <button class="is-active" data-focus-mode="focus" data-minutes="25">专注</button>
+              <button data-focus-mode="shortBreak" data-minutes="5">短休</button>
+              <button data-focus-mode="longBreak" data-minutes="15">长休</button>
+            </div>
+            <label class="focus-duration"><input id="focusDuration" type="number" min="1" max="180" value="25" /><span>分钟</span></label>
+            <time class="focus-time" id="focusTime">25:00</time>
+            <div class="focus-actions">
+              <button class="focus-start" id="focusStart">开始专注</button>
+              <button class="focus-reset" id="focusReset" title="重置">↺</button>
+            </div>
+            <span class="focus-rounds" id="focusRounds">已完成 0 轮</span>
+            <button type="button" class="focus-open" id="focusOpen" hidden>↗ 打开专注大屏</button>
+            <div class="focus-task-line"><span>这一轮</span><strong id="focusTaskLabel">自由专注 · 或从任务卡开始</strong></div>
+          </section>
+
+          <section class="focus-insights" aria-label="专注成果">
+            <div><span>今日投入</span><strong id="focusTodayTotal">0 分钟</strong></div>
+            <div><span>本周投入</span><strong id="focusWeekTotal">0 分钟</strong></div>
+            <div><span>今日完成番茄</span><strong id="focusTodayRounds">0 轮</strong></div>
+            <button id="focusHistoryButton" type="button">查看专注记录 ↗</button>
+          </section>
+
+          <form class="composer" id="taskForm">
+            <div class="composer-main">
+              <span class="composer-plus">＋</span>
+              <input id="taskTitle" name="title" maxlength="120" autocomplete="off" placeholder="现在，想完成什么？" aria-label="任务标题" required />
+              <button class="add-button" type="submit">加入清单 <span>↵</span></button>
+            </div>
+          </form>
+
+          <section class="stage-panel" id="stagePanel" hidden>
+            <div class="stage-heading">
+              <span>STAGE PLANNER</span>
+              <strong>先把事情放进来，再拆到每一天</strong>
+              <small>阶段跨度需超过 7 天；智能分配不会覆盖你手动锁定的日期。</small>
+            </div>
+            <div class="stage-controls">
+              <div class="stage-date-range" role="group" aria-label="阶段起止日期">
+                <label>阶段开始<input type="date" id="stageStart" /></label>
+                <span class="range-arrow" aria-hidden="true">→</span>
+                <label>阶段结束<input type="date" id="stageEnd" /></label>
+              </div>
+              <label>每天最多
+                <select id="dailyCapacity"><option value="1">1 项</option><option value="2">2 项</option><option value="3">3 项</option><option value="4">4 项</option><option value="5">5 项</option><option value="6">6 项</option></select>
+              </label>
+              <label>可投入分钟<input id="dailyMinutes" type="number" min="15" max="1440" step="15" value="120" /></label>
+              <button id="autoSchedule" type="button">✦ 智能分配</button>
+            </div>
+            <div class="stage-modes">
+              <span><i>✦</i><b>智能分配</b> 按优先级从今天向后排</span>
+              <span><i>▣</i><b>自己安排</b> 点任务右侧日历锁定日期</span>
+            </div>
+          </section>
+
+          <div class="list-toolbar">
+            <div class="status-tabs" role="tablist">
+              <button class="is-active" data-filter="all">全部</button>
+              <button data-filter="open">未完成</button>
+              <button data-filter="done">已完成</button>
+            </div>
+            <span class="task-summary" id="taskSummary">0 项任务</span>
+          </div>
+          <div class="task-search"><span aria-hidden="true">⌕</span><input id="taskSearch" type="search" placeholder="搜索全部任务、备注或小步骤" aria-label="搜索全部任务" autocomplete="off" /><button id="clearSearch" type="button" hidden>清除</button></div>
+
+          <section class="task-list" id="taskList" aria-live="polite"></section>
+        </div>
+      </main>
+
+      <aside class="habit-rail" aria-label="每日坚持提醒">
+        <div class="habit-window-bar drag-region">
+          <div class="window-actions no-drag">
+            <button id="minimizeButton" class="window-control" aria-label="最小化" title="最小化">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 12h10" /></svg>
+            </button>
+            <button id="closeButton" class="window-control" aria-label="关闭到托盘" title="关闭到托盘">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 8 8 8M16 8l-8 8" /></svg>
+            </button>
+          </div>
+        </div>
+        <div class="habit-scroll">
+          <header class="habit-heading">
+            <div>
+              <p>DAILY RHYTHM</p>
+              <h2>每日坚持</h2>
+              <span>小事重复，慢慢变成你的节奏。</span>
+            </div>
+            <strong id="habitActiveCount">0</strong>
+          </header>
+
+          <div class="habit-next">
+            <span>下一次提醒</span>
+            <strong id="habitNextLabel">还没有开启的习惯</strong>
+          </div>
+
+          <section class="habit-list" id="habitList" aria-live="polite"></section>
+
+          <form class="habit-form" id="habitForm">
+            <div class="habit-form-title">
+              <span>＋</span>
+              <input id="habitTitle" maxlength="80" placeholder="添加每天想坚持的小事" required />
+            </div>
+            <div class="habit-form-schedule">
+              <select id="habitScheduleType" aria-label="提醒类型">
+                <option value="interval">每隔一段时间</option>
+                <option value="daily">每天固定时间</option>
+              </select>
+              <label id="habitIntervalField">每 <input id="habitInterval" type="number" min="5" max="1440" value="60" /> 分钟</label>
+              <label id="habitTimeField" hidden>每天 <input id="habitTime" type="time" value="08:00" /></label>
+            </div>
+            <button type="submit">加入每日坚持</button>
+          </form>
+          <p class="habit-footnote">所有时间都能直接修改；关闭开关即可暂停提醒。</p>
+        </div>
+      </aside>
+    </div>
+
+    <dialog id="addTaskDialog" class="edit-dialog add-task-dialog">
+      <form id="addTaskDetails">
+        <div class="dialog-kicker">安排下一步</div>
+        <h2 id="addTaskHeading"></h2>
+        <label>任务名称<input id="captureTitle" maxlength="120" required /></label>
+        <p id="captureRecognition" class="capture-recognition" hidden></p>
+        <label id="taskPlanModeField">推进方式
+          <select id="taskPlanMode">
+            <option value="fixed">指定日期与时间</option>
+            <option value="day">选一天做，不限定时间</option>
+            <option value="backlog">稍后分配到某天</option>
+            <option value="ongoing">每天持续推进（无具体时间）</option>
+          </select>
+        </label>
+        <div class="composer-options">
+          <label id="taskDateField"><span id="taskDateLabel">日期</span><input id="taskDate" type="date" required /></label>
+          <label id="taskTimeField"><span>时间</span><input id="taskTime" type="time" required /></label>
+          <label><span>优先级</span><select id="taskPriority"><option value="normal">普通</option><option value="high">重要</option><option value="low">不着急</option></select></label>
+          <label><span>提醒规则</span><select id="taskReminderMode"><option value="none">不单独提醒</option><option value="event">提前提醒</option><option value="interval">循环阶段检查</option></select></label>
+        </div>
+        <div class="presentation-choices" role="group" aria-label="提醒展示方式"><label><input type="radio" name="taskPresentation" value="light" />轻提示</label><label><input type="radio" name="taskPresentation" value="fullscreen" checked />全屏提醒</label></div>
+        <div class="reminder-options">
+          <label id="taskReminderMinutesField" hidden><span id="taskReminderMinutesLabel">提前</span><span class="number-with-unit"><input id="taskReminderMinutes" type="number" min="1" max="10080" value="10" /><b id="taskReminderUnit">分钟</b></span></label>
+          <p id="taskReminderHint">普通系统提醒仍会按左侧频率运行。</p>
+        </div>
+        <div class="dialog-grid">
+          <label id="taskDeadlineField">最晚截止（可选）<input id="taskDeadline" type="date" /></label>
+          <label id="taskDeadlineDaysField">提前提醒（天）<input id="taskDeadlineDays" type="number" min="0" max="365" value="3" /></label>
+        </div>
+        <details class="add-notes"><summary>补充分类、重复、预计投入与小步骤</summary>
+          <div class="dialog-grid"><label>分类<input id="taskCategory" list="categoryOptions" maxlength="30" placeholder="如：工作／学习／生活" /></label><label>预计投入（分钟）<input id="taskEstimate" type="number" min="1" max="1440" value="25" /></label></div>
+          <label>真正的重复任务<select id="taskRepeat"><option value="none">不重复</option><option value="daily">每天</option><option value="weekdays">每个工作日</option><option value="weekly">每周同一天</option><option value="monthly">每月同一天</option></select></label><p class="field-hint">完成后生成下一期；错过多期只生成下一期。最晚截止不自动继承。</p>
+          <label class="inline-check"><input id="taskUrgent" type="checkbox" />重要提醒（仅在你允许时打破勿扰）</label>
+          <label><span>备注</span><textarea id="taskNotes" maxlength="200" rows="2" placeholder="给未来的自己一点提示"></textarea></label><label><span>拆成小步骤（每行一个，最多 100 个）</span><textarea id="taskSteps" maxlength="12099" rows="3" placeholder="准备数据&#10;运行第一组实验&#10;整理实验结果"></textarea></label></details>
+        <p id="addTaskError" class="form-error" role="alert"></p>
+        <div class="dialog-actions"><button type="button" id="cancelAdd" class="ghost-button">取消</button><button type="submit" id="confirmAdd" class="primary-button">确认加入</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="editDialog" class="edit-dialog">
+      <form method="dialog" id="editForm">
+        <div class="dialog-kicker">调整任务</div>
+        <h2>让下一步更清晰</h2>
+        <input type="hidden" id="editId" />
+        <label>任务名称<input id="editTitle" maxlength="120" required /></label>
+        <label>推进方式
+          <select id="editScheduleMode">
+            <option value="fixed">指定日期与时间</option>
+            <option value="day">选一天做，不限定时间</option>
+            <option value="backlog">放回阶段待排</option>
+            <option value="ongoing">每天持续推进（无具体时间）</option>
+          </select>
+        </label>
+        <div class="dialog-grid" id="editDateTimeFields">
+          <label>自主安排日期<input id="editDate" type="date" /></label>
+          <label>时间<input id="editTime" type="time" /></label>
+        </div>
+        <div class="dialog-grid deadline-edit-grid">
+          <label>最晚截止日期（可选）<input id="editDeadline" type="date" /></label>
+          <label>提前几天开始提醒<input id="editDeadlineDays" type="number" min="0" max="365" value="3" /></label>
+        </div>
+        <p class="dialog-schedule-hint" id="editScheduleHint">指定时间的任务会在到点后显示超时。</p>
+        <label>备注<textarea id="editNotes" maxlength="200" rows="3"></textarea></label>
+        <label>优先级<select id="editPriority"><option value="normal">普通</option><option value="high">重要</option><option value="low">不着急</option></select></label>
+        <div class="dialog-reminder">
+          <label>提醒方式
+            <select id="editReminderMode"><option value="none">不单独提醒</option><option value="event">提前提醒</option><option value="interval">循环阶段检查</option></select>
+          </label>
+          <label id="editReminderMinutesField" hidden><span id="editReminderMinutesLabel">提前多少分钟</span><input id="editReminderMinutes" type="number" min="1" max="10080" value="10" /></label>
+        </div>
+        <p class="dialog-reminder-hint" id="editReminderHint">大屏提醒会覆盖整个主屏幕，确保足够醒目。</p>
+        <details><summary>分类、重复与提醒展示</summary><div class="dialog-grid"><label>分类<input id="editCategory" list="categoryOptions" maxlength="30" /></label><label>预计投入（分钟）<input id="editEstimate" type="number" min="1" max="1440" value="25" /></label></div>
+          <label>重复任务<select id="editRepeat"><option value="none">不重复</option><option value="daily">每天</option><option value="weekdays">每个工作日</option><option value="weekly">每周同一天</option><option value="monthly">每月同一天</option></select></label>
+          <label>提醒展示<select id="editPresentation"><option value="fullscreen">全屏提醒</option><option value="light">轻提示</option></select></label><label class="inline-check"><input id="editUrgent" type="checkbox" />重要提醒（仅在你允许时打破勿扰）</label>
+        </details>
+        <div class="dialog-actions">
+          <button value="cancel" class="ghost-button">取消</button>
+          <button value="default" id="saveEdit" class="primary-button">保存修改</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="focusHistoryDialog" class="edit-dialog history-dialog">
+      <div class="history-heading"><div><p class="dialog-kicker">每一点投入，都算数</p><h2>专注记录</h2></div><button id="closeHistory" type="button" aria-label="关闭专注记录">×</button></div>
+      <p class="history-note">暂停不计时，提前结束仍记录投入；完成番茄不等于完成任务。旧版本没有明细的轮数不补算时间。</p>
+      <div id="historyRows"></div>
+    </dialog>
+    <dialog id="stepRenameDialog" class="edit-dialog"><form id="stepRenameForm"><h2>调整这一小步</h2><label>名称<input id="stepRenameTitle" maxlength="120" required /></label><div class="dialog-actions"><button id="cancelStepRename" type="button" class="ghost-button">取消</button><button type="submit" class="primary-button">保存</button></div></form></dialog>
+
+    <div class="reward-stage" id="rewardStage" aria-hidden="true">
+      <div class="reward-halo"></div>
+      <div class="reward-card">
+        <img class="reward-bear" src="assets/bear-authenticity.png" alt="王王碎小熊" />
+        <strong id="rewardTitle">漂亮！</strong>
+        <small id="rewardSubtitle">+1 完成力</small>
+      </div>
+    </div>
+    <div class="particle-layer" id="particleLayer" aria-hidden="true"></div>
+    <div class="toast" id="toast" role="status"></div>
+    <datalist id="categoryOptions"><option value="工作"></option><option value="学习"></option><option value="生活"></option></datalist>
+    <dialog id="settingsDialog" class="edit-dialog settings-dialog"><div class="history-heading"><div><p class="dialog-kicker">本地保存，安心使用</p><h2>设置与备份</h2></div><button type="button" data-close-dialog="settingsDialog" aria-label="关闭设置">×</button></div><div id="settingsContent"></div><div id="legacyPreferences"></div></dialog>
+    <dialog id="schedulePreviewDialog" class="edit-dialog"><h2>先看安排，再确认</h2><div id="schedulePreviewRows"></div><div class="dialog-actions"><button type="button" data-close-dialog="schedulePreviewDialog" class="ghost-button">取消</button><button id="applySchedule" type="button" class="primary-button">应用此安排</button></div></dialog>
+    <dialog id="habitSettingsDialog" class="edit-dialog"><form id="habitSettingsForm"><h2>这件小事，怎样提醒</h2><input id="habitSettingsId" type="hidden" /><label>展示方式<select id="habitPresentation"><option value="light">轻提示</option><option value="fullscreen">全屏提醒</option></select></label><fieldset class="weekday-choices"><legend>在哪几天提醒</legend><label><input type="checkbox" name="habitDay" value="1" />一</label><label><input type="checkbox" name="habitDay" value="2" />二</label><label><input type="checkbox" name="habitDay" value="3" />三</label><label><input type="checkbox" name="habitDay" value="4" />四</label><label><input type="checkbox" name="habitDay" value="5" />五</label><label><input type="checkbox" name="habitDay" value="6" />六</label><label><input type="checkbox" name="habitDay" value="0" />日</label></fieldset><label class="inline-check"><input id="habitWindowEnabled" type="checkbox" />只在指定时段提醒</label><div class="dialog-grid"><label>开始<input id="habitWindowStart" type="time" value="09:00" /></label><label>结束<input id="habitWindowEnd" type="time" value="18:00" /></label></div><p class="field-hint">可跨午夜；开始和结束相同表示全天。每日定点需落在此时段内。</p><div class="dialog-actions"><button type="button" data-close-dialog="habitSettingsDialog" class="ghost-button">取消</button><button type="submit" class="primary-button">保存提醒设置</button></div></form></dialog>
+
+    <script src="../shared/domain.js"></script>
+    <script src="../shared/diary-v1.js"></script>
+    <script src="confirm-dialog.js"></script>
+    <script src="../shared/productivity.js"></script>
+    <script src="workbench.js"></script>
+    <script src="app.js"></script>
+    <script src="select-pop.js"></script>
+    <script src="../shared/controls.js"></script>
+    <script src="themed-controls.js"></script>
+  </body>
+</html>

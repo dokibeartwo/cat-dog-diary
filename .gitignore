@@ -1,0 +1,17 @@
+node_modules/
+release/
+dist/
+out/
+qa-reports/
+*.log
+.DS_Store
+.capture-user-data/
+previews/
+icon-diagnostics/
+backups/
+done-data.json
+done-data*.json
+*.private-backup.json
+.work-*/
+.candidate-*/
+.previous-*/

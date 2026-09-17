@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN" data-theme-id="bg1" data-preview-family="star-dream">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>猫狗日记 · 专注此刻</title>
+  <link rel="stylesheet" href="theme-previews.css" />
+  <link rel="stylesheet" href="focus.css" />
+  <link rel="stylesheet" href="confirm-dialog.css" />
+</head>
+<body>
+  <div class="focus-backdrop" id="backdrop"></div>
+  <img class="focus-art" id="artwork" alt="" />
+  <div class="focus-wash"></div>
+  <main class="focus-screen">
+    <header>
+      <div class="focus-brand"><img src="assets/bear-authenticity.png" alt="王王碎小熊" /><div><strong>猫狗日记</strong><small>王王碎小熊 · CAT & DOG DIARY</small></div></div>
+      <button id="backButton" class="quiet">↙ 返回清单</button>
+    </header>
+    <section class="timer-stage">
+      <p class="eyebrow">ONE MOMENT AT A TIME</p>
+      <h1 id="modeLabel">专注此刻</h1>
+      <p id="focusedTask" class="focused-task">自由专注</p>
+      <div class="timer-orbit" id="timerOrbit">
+        <svg viewBox="0 0 100 100" aria-hidden="true"><circle class="orbit-track" cx="50" cy="50" r="46" /><circle class="orbit-progress" cx="50" cy="50" r="46" pathLength="100" /></svg>
+        <time id="countdown" aria-label="剩余时间">25:00</time>
+      </div>
+      <p class="focus-copy" id="focusCopy">不着急，只把注意力放在这一刻。</p>
+      <p class="rounds" id="rounds">已完成 0 轮专注</p>
+    </section>
+    <footer>
+      <div class="focus-controls"><button id="pauseButton" class="primary">暂停</button><button id="stopButton" class="quiet">结束本轮</button></div>
+      <p id="focusHint">Esc 收起到专注小组件，计时继续 · 会议与截止提醒仍会及时通知</p>
+      <p id="focusError" role="alert"></p>
+    </footer>
+  </main>
+  <script src="confirm-dialog.js"></script>
+  <script src="../shared/domain.js"></script>
+  <script src="window-ready.js"></script>
+  <script src="focus.js"></script>
+</body>
+</html>
