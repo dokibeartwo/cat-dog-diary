@@ -74,7 +74,8 @@ function harness({ argv = [], packaged = true, login = {}, saved } = {}) {
           : name === './shared/diary-v1.js' ? require('../src/shared/diary-v1')
           : name === './state-store.js' ? require('../src/state-store')
           : name === './security.js' ? require('../src/security')
-          : name === './window-coordinator.js' ? require('../src/window-coordinator') : require(name),
+          : name === './window-coordinator.js' ? require('../src/window-coordinator')
+          : name === './sync-service.js' ? require('../src/sync-service') : require(name),
     process: { argv, platform: 'win32', execPath: 'X:/猫狗日记/猫狗日记.exe', cwd: () => 'X:/source' },
     __dirname: 'X:/source', console, structuredClone, setTimeout() {}, clearTimeout() {}, setInterval() {}, clearInterval() {},
   });

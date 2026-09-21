@@ -15,3 +15,6 @@ done-data*.json
 .work-*/
 .candidate-*/
 .previous-*/
+.env
+.env.*
+!.env.example

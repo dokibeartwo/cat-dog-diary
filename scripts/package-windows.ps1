@@ -63,6 +63,8 @@ New-Item -ItemType Directory -Path $appRoot -Force | Out-Null
 Copy-Item -LiteralPath $iconPath -Destination (Join-Path $candidateRoot ($productName + ".ico"))
 # Preserve isolated QA modules: the final EXE accepts --qa-v1 / --qa-windows.
 Copy-Item -LiteralPath (Join-Path $projectRoot "src") -Destination (Join-Path $appRoot "src") -Recurse
+New-Item -ItemType Directory -Path (Join-Path $appRoot "packages") -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $projectRoot "packages\core") -Destination (Join-Path $appRoot "packages\core") -Recurse
 Copy-Item -LiteralPath (Join-Path $projectRoot "package.json") -Destination (Join-Path $appRoot "package.json")
 $guideName = (-join @([char]0x4F7F, [char]0x7528, [char]0x8BF4, [char]0x660E)) + ".md"
 foreach ($document in @("README.md", $guideName, "RELEASE-1.0.0.md", "PRIVACY.md", "ASSETS.md")) {

@@ -63,3 +63,4 @@ html,body{min-width:960px;min-height:640px}
 .category-suggestions button:hover{background:var(--acid)}
 .settings-row input[type=checkbox]:disabled{cursor:wait}
 .settings-row input[type=checkbox]:focus-visible{outline:3px solid var(--violet);outline-offset:3px}
+.sync-panel{padding:16px 18px;border:1px solid color-mix(in srgb,var(--accent,#7663cf) 26%,transparent);border-radius:16px;background:color-mix(in srgb,var(--surface,#fff7d4) 78%,transparent);display:grid;gap:12px;margin-bottom:16px}.sync-panel .dialog-grid{margin:0}.sync-panel input{min-width:0}.sync-panel .settings-buttons{margin:0}.sync-panel .danger-button{color:#a33b4f;border-color:#e98baa}

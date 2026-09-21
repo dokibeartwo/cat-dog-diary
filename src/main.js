@@ -11,6 +11,7 @@ const diary = require('./shared/diary-v1.js');
 const {StateStore} = require('./state-store.js');
 const {WindowCoordinator}=require('./window-coordinator.js');
 const {assertTrustedSender,secureContents}=require('./security.js');
+const {SyncService, applyEntities}=require('./sync-service.js');
 
 let mainWindow;
 let widgetWindow;
@@ -26,6 +27,9 @@ let activeReminder = null;
 let lastScreenId = null;
 let state;
 let store;
+let syncService;
+let syncingRemote = false;
+let cloudSyncTimer;
 let quickShortcutAvailable=false;
 let dayChecked=null;
 let schedulePreview=null;
@@ -321,7 +325,7 @@ function saveState(next=state) {
 }
 
 function publicState() {
-  return {...structuredClone(state),appVersion:app.getVersion?.() || '1.0.0',presentation:windows().state(),dataStatus:{readOnly:Boolean(store?.readOnly),message:store?.issue || ''},quickShortcutAvailable};
+  return {...structuredClone(state),appVersion:app.getVersion?.() || '1.0.0',presentation:windows().state(),dataStatus:{readOnly:Boolean(store?.readOnly),message:store?.issue || ''},sync:syncService?.status() || {configured:false,signedIn:false,pending:0,conflicts:0},quickShortcutAvailable};
 }
 
 function broadcastState() {
@@ -347,6 +351,7 @@ function mutateState(mutator) {
     if(child)prepareTaskReminder(child,true);
   }
   runtime.reconcile(draft);
+  if (!syncingRemote) syncService?.capture(state, draft);
   if (!captureMode) saveState(draft);
   state = draft;
   if (state.focusTimer.status === 'idle') windows().finish();
@@ -359,6 +364,30 @@ function mutateState(mutator) {
   setTimeout(showNextBigReminder, 0);
   syncWidgetWindow();
   return publicState();
+}
+
+async function runCloudSync() {
+  if (!syncService?.status().signedIn) throw Error('请先在设置中登录同步账号');
+  let result;
+  try { result = await syncService.sync(); }
+  catch (error) { syncService.meta.lastError = String(error.message || error); syncService.save(); throw error; }
+  syncService.meta.lastError = null; syncService.save();
+  if (result.pulled?.length) {
+    syncingRemote = true;
+    try {
+      state = normalizeState(applyEntities(state, result.pulled));
+      if (!captureMode) saveState(state);
+      // Keep the per-account local snapshot aligned with the state that is
+      // now visible. It is used when the user later switches accounts; using
+      // the pre-pull snapshot could otherwise re-show stale tasks.
+      syncService.saveLocalSnapshot(state);
+    } finally { syncingRemote = false; }
+    dayChecked = null;
+    resetReminderSchedule();
+    broadcastState();
+    windows().sync();
+  }
+  return { ...publicState(), syncResult: { pushed: result.pushed, pulled: result.pulled?.length || 0, conflicts: result.conflicts || 0 } };
 }
 
 function createTrayImage() {
@@ -1557,6 +1586,34 @@ function registerIpc() {
   // Every handler in this registration block passes through the same gate.
   const ipcMain={handle:registerTrustedIpc};
   ipcMain.handle("state:get", () => publicState());
+  ipcMain.handle('sync:status', () => syncService?.status() || { configured: false, signedIn: false, pending: 0, conflicts: 0 });
+  ipcMain.handle('sync:configure', (_event, config) => syncService.configure(config));
+  ipcMain.handle('sync:send-otp', (_event, email) => syncService.sendOtp(email));
+  ipcMain.handle('sync:verify-otp', async (_event, { email, token }) => {
+    const oldAccountId = syncService.meta.currentAccountId || syncService.meta.lastAccountId || null;
+    if (syncService.meta.session && oldAccountId) syncService.saveLocalSnapshot(state);
+    const result = await syncService.verifyOtp(email, token);
+    const switchedAccount = Boolean(oldAccountId && oldAccountId !== result.accountId);
+    if (switchedAccount) {
+      // Never display account A's tasks while account B is being selected.
+      // Restore B's local snapshot if one exists; otherwise show a clean local
+      // state and let the first pull populate it.
+      state = normalizeState(syncService.localSnapshot() || createDefaultState());
+      if (!captureMode) saveState(state);
+      broadcastState();
+    }
+    const account = syncService.account();
+    if (account && !account.migrated) {
+      const empty = { tasks: [], habits: [], stagePlan: {}, focusHistory: [], preferences: {} };
+      if (!switchedAccount) syncService.capture(empty, state);
+      account.migrated = true;
+      syncService.save();
+    }
+    return publicState();
+  });
+  ipcMain.handle('sync:now', () => runCloudSync());
+  ipcMain.handle('sync:logout', () => syncService.logout());
+  ipcMain.handle('sync:delete-account', () => syncService.deleteAccount());
   ipcMain.handle("task:add", (_event, input) => mutateState((draft) => {
     const title = String(input.title || "").trim().slice(0, 120);
     if (!title) throw new Error("任务标题不能为空");
@@ -1843,7 +1900,13 @@ function registerIpc() {
   ipcMain.handle("startup:get", () => startupSettings());
   ipcMain.handle("startup:set", (_event, enabled) => setStartup(enabled));
   ipcMain.handle("focus:update", (_event, command) => {
+    // Keep validation synchronous for callers that use IPC as a command API.
+    // The lease check below may still return a promise, but malformed commands
+    // must throw before any state mutation (and before a rejected Promise can
+    // escape an IPC test or renderer click handler).
     if (command?.presentation !== undefined && !['fullscreen','keep'].includes(command.presentation)) throw new Error('无效的专注显示方式');
+    const currentTimer = state?.focusTimer;
+    if (command?.taskId && currentTimer?.status !== 'idle' && currentTimer.taskId !== command.taskId) throw new Error('请先结束当前专注，再切换任务');
     let appliedCommand=false;
     const result = mutateState((draft) => {
       const now = Date.now();
@@ -1874,6 +1937,17 @@ function registerIpc() {
       reminderWindow?.hide();
     }
     if(appliedCommand&&command.action==='start'&&command.presentation!=='keep')windows().requestFull();
+    if (appliedCommand && command.action === 'start' && syncService?.status().signedIn) {
+      return syncService.acquireFocusLease(state.focusTimer.sessionId).then((leaseOk) => {
+        if (!leaseOk) {
+          mutateState((draft) => runtime.updateFocus(draft.focusTimer, { action: 'stop', sessionId: draft.focusTimer.sessionId }));
+          throw Error('此账号正在另一台设备专注，请先结束另一台设备的专注');
+        }
+        showNextBigReminder();
+        return publicState();
+      });
+    }
+    if (appliedCommand && ['stop', 'reset'].includes(command.action) && syncService?.status().signedIn) syncService.releaseFocusLease(command.sessionId || null).catch(() => undefined);
     showNextBigReminder();
     return publicState();
   });
@@ -1884,6 +1958,7 @@ function registerIpc() {
 }
 
 app.whenReady().then(() => {
+  syncService = new SyncService(path.join(app.getPath('userData'), 'sync-state.json'));
   state = isolatedMode ? releaseSmokeMode&&process.argv.includes('--qa-clean') ? createDefaultState() : normalizeState(createCaptureState()) : loadState();
   if(stabilityQaMode||v1QaMode||releaseSmokeMode){state.habits.forEach(item=>item.active=false);state.tasks.forEach(item=>{item.reminderActive=false;item.deadlineDate=null;});}
   state.focusTimer = runtime.normalizeFocus(state.focusTimer);
@@ -1896,9 +1971,15 @@ app.whenReady().then(() => {
   createWidgetWindow();
   createTray();
   registerQuickShortcut();
-  powerMonitor?.on('resume',()=>{dayChecked=null;precisionTick();});
+  powerMonitor?.on('resume',()=>{dayChecked=null;precisionTick();if(syncService?.status().signedIn)runCloudSync().catch(()=>undefined);});
   resetReminderSchedule();
   startPrecisionSchedule();
+  if (!isolatedMode) cloudSyncTimer = setInterval(() => {
+    if (syncService?.status().signedIn && (syncService.status().pending || 0) > 0) runCloudSync().catch(() => undefined);
+  }, 60_000);
+  if (!isolatedMode && syncService.status().signedIn) {
+    setTimeout(() => runCloudSync().catch(error => writeWindowLog({ event: 'sync-error', message: String(error.message || error) })), 2_000);
+  }
   if(releaseSmokeMode){
     require('./qa/release-smoke.js')({main:()=>mainWindow,widget:()=>widgetWindow,state:()=>publicState(),
       autoStart:autoStartMode,clean:process.argv.includes('--qa-clean'),version:app.getVersion(),finish:code=>{quitting=true;app.exit(code);}}).catch(error=>{console.error(error);quitting=true;app.exit(1);});
@@ -1939,5 +2020,5 @@ app.whenReady().then(() => {
   app.on("activate", showMainWindow);
 });
 
-app.on("before-quit", () => { quitting = true;globalShortcut?.unregisterAll();windowCoordinator?.dispose(); });
+app.on("before-quit", () => { quitting = true;if (cloudSyncTimer) clearInterval(cloudSyncTimer);globalShortcut?.unregisterAll();windowCoordinator?.dispose(); });
 app.on("window-all-closed", (event) => event.preventDefault());

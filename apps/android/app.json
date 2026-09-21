@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "猫狗日记",
+    "slug": "cat-dog-diary",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "catdogdiary",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "backgroundColor": "#FFF7D4"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dokibeartwo.catdogdiary"
+    },
+    "android": {
+      "package": "com.dokibeartwo.catdogdiary",
+      "versionCode": 1,
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "VIBRATE",
+        "SCHEDULE_EXACT_ALARM",
+        "USE_FULL_SCREEN_INTENT",
+        "RECEIVE_BOOT_COMPLETED",
+        "WAKE_LOCK"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#FFD85C",
+        "foregroundImage": "./assets/icon.png"
+      }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#FFD85C",
+          "sounds": []
+        }
+      ],
+      "expo-sqlite"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}

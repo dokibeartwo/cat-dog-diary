@@ -2,9 +2,9 @@
 
 一款本地优先的 Windows 待办、提醒与番茄钟应用。它把“随手记下来、按时提醒、专心做完”放在同一个界面里，并保留六套猫狗主题、全屏提醒和透明桌面小组件。
 
-> 当前版本：**1.0.0** · Windows x64 · 无账号 · 无云同步 · 无遥测
+> Windows 稳定版：**1.0.0** · Android 同步内测：**1.1.0-beta.1** · 默认本地优先 · 无遥测
 
-[下载 1.0.0](https://github.com/dokibeartwo/cat-dog-diary/releases/tag/v1.0.0)　·　[使用说明](使用说明.md)　·　[隐私说明](PRIVACY.md)　·　[版本说明](RELEASE-1.0.0.md)
+[下载 1.0.0](https://github.com/dokibeartwo/cat-dog-diary/releases/tag/v1.0.0)　·　[使用说明](使用说明.md)　·　[隐私说明](PRIVACY.md)　·　[1.1.0-beta.1说明](RELEASE-1.1.0-BETA.1.md)　·　[1.0.0版本说明](RELEASE-1.0.0.md)
 
 ![猫狗日记今天工作台](docs/screenshots/today.png)
 
@@ -58,13 +58,21 @@ AE1F951BF48CFB2FAF7B4B9FCFA8DFCEBA22430A7198D405347D0EEF2DA752E6
 
 ## 数据与隐私
 
-猫狗日记正常使用时不联网，不需要注册账号，也不会上传任务、日志或使用数据。任务保存在：
+Windows 版在未配置同步时不联网，不需要注册账号，也不会上传任务、日志或使用数据。任务保存在：
 
 ```text
 %APPDATA%\猫狗日记\done-data.json
 ```
 
 公开仓库和 Release 不包含作者的真实任务、AppData、备份、诊断日志或私人截图。更多信息见 [PRIVACY.md](PRIVACY.md)。
+
+## Android 与跨设备同步内测
+
+`apps/android` 是独立的 Expo/React Native 客户端，提供今天、任务、每日坚持、专注、六套主题和邮箱验证码登录。Windows 与 Android 的同步数据层使用 Supabase，采用本地优先策略：断网继续使用，联网后上传待处理变更并拉取云端变更；设备级提醒、离席状态、桌面小组件和正在运行的专注界面不会上传。
+
+内测需要自行创建 Supabase 项目并执行 [`supabase/migrations/20260921000000_sync.sql`](supabase/migrations/20260921000000_sync.sql)，再把项目 URL 和 publishable key 写入本地配置（参考 [`.env.example`](.env.example)，不要提交真实密钥）。邮箱验证码、任务数据、习惯和专注历史会存入该项目；设置中可导出本机数据、退出账号或删除云端账号。服务端依赖 RLS，客户端不使用 service role key。
+
+Android 会请求通知、震动和精确闹钟权限，使用高重要性锁屏通知；应用在前台可以显示主题化提醒。Android 14 对后台全屏通知有系统限制，普通待办不能保证在所有品牌上强制全屏，详见 [`apps/android/README.md`](apps/android/README.md)。当前工作区未配置真实 Supabase 项目，且未安装 Android SDK/Expo EAS，因此尚未生成可下载 APK；源码可直接作为 GitHub 内测基线。
 
 ## 从源码运行
 
@@ -95,6 +103,9 @@ npm run dist:win
 ```text
 src/                 Electron 主进程、渲染界面和共享逻辑
 tests/               Node.js 逻辑与安全回归测试
+packages/core/       Windows 与 Android 共用的 v1→v2 数据迁移、实体和同步规则
+apps/android/        Expo/React Native Android 内测客户端
+supabase/            数据库迁移、RLS 和同步 RPC
 scripts/             图标与 Windows 便携包构建脚本
 docs/screenshots/    隔离示例数据生成的界面截图
 使用说明.md          完整操作说明

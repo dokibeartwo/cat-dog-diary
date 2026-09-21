@@ -1,0 +1,31 @@
+{
+  "name": "cat-dog-diary-android",
+  "version": "0.1.0-internal",
+  "private": true,
+  "description": "猫狗日记 Android 同步内测客户端",
+  "main": "expo/AppEntry.js",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.1.0",
+    "@supabase/supabase-js": "^2.49.0",
+    "expo": "~52.0.0",
+    "expo-constants": "~17.0.0",
+    "expo-device": "~7.0.0",
+    "expo-linking": "~7.0.0",
+    "expo-notifications": "~0.29.0",
+    "expo-secure-store": "~14.0.0",
+    "expo-sqlite": "~15.0.0",
+    "react": "18.3.1",
+    "react-native": "0.76.5",
+    "react-native-safe-area-context": "4.12.0"
+  },
+  "devDependencies": {
+    "@types/react": "~18.3.12",
+    "typescript": "~5.3.3"
+  }
+}
