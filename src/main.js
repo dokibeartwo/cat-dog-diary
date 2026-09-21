@@ -1612,6 +1612,8 @@ function registerIpc() {
     return publicState();
   });
   ipcMain.handle('sync:now', () => runCloudSync());
+  ipcMain.handle('sync:conflicts', () => syncService?.listConflicts() || []);
+  ipcMain.handle('sync:resolve-conflict', (_event, { conflictId, resolution }) => syncService?.resolveConflict(conflictId, resolution));
   ipcMain.handle('sync:logout', () => syncService.logout());
   ipcMain.handle('sync:delete-account', () => syncService.deleteAccount());
   ipcMain.handle("task:add", (_event, input) => mutateState((draft) => {

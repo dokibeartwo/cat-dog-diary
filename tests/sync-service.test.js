@@ -40,3 +40,23 @@ test('sync service uses RPC, removes acknowledged mutations, and applies pulled 
   const merged = applyEntities({ tasks: [], habits: [], stagePlan: {}, focusHistory: [], preferences: {} }, result.pulled);
   assert.equal(merged.tasks[0].title, '云端任务');
 });
+
+test('sync service lists open conflicts and resolves a selected field', async () => {
+  const calls = [];
+  const service = new SyncService(tempFile(), { env: {}, fetchImpl: async (url, options = {}) => {
+    calls.push({ url, options });
+    if (url.endsWith('/auth/v1/verify')) return response({ access_token: 'access', refresh_token: 'refresh', user: { id: 'user-a', email: 'a@example.com' } });
+    if (url.includes('/rest/v1/sync_conflicts')) return response([{ conflict_id: 'c1', entity_type: 'task', entity_id: 't1', conflict_fields: ['title'], local_patch: { title: '本机' }, remote_payload: { title: '云端' } }]);
+    if (url.endsWith('/rpc/resolve_conflict')) return response({ resolved: true, revision: 3 });
+    throw new Error(`unexpected ${url}`);
+  }});
+  service.configure({ url: 'https://project.supabase.co', publishableKey: 'publishable-key-123' });
+  await service.verifyOtp('a@example.com', '123456');
+  service.account().conflicts = [{ conflictId: 'c1' }];
+  const conflicts = await service.listConflicts();
+  assert.equal(conflicts[0].conflict_id, 'c1');
+  const result = await service.resolveConflict('c1', { title: '本机' });
+  assert.equal(result.resolved, true);
+  assert.equal(service.account().conflicts.length, 0);
+  assert.equal(calls.some(call => call.url.endsWith('/rpc/resolve_conflict')), true);
+});

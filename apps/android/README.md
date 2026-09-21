@@ -32,6 +32,8 @@ npm test
 npx eas build --profile preview --platform android
 ```
 
+也可以在 GitHub Actions 手动运行 `Android preview APK` 工作流。首次使用前，需要在 Expo 账号中执行一次 `npx eas init`，把生成的 `extra.eas.projectId` 写回 `app.json`，并在仓库 Settings → Secrets and variables → Actions 中配置 `EXPO_TOKEN`、`EXPO_PUBLIC_SUPABASE_URL` 和 `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`。工作流只把 publishable key 注入构建环境，不能使用 service-role key；EAS 完成后会在日志中提供 APK 下载地址。
+
 ## 提醒权限说明
 
 Android 13 及以上需要通知权限；Android 12 及以上的精确到点提醒可能需要“闹钟和提醒”权限。应用会创建高重要性提醒频道并请求震动、锁屏显示等能力。Android 14 对后台全屏通知有系统限制，因此后台提醒以高优先级通知、震动和锁屏显示为准，应用正在前台时才显示主题化全屏页面。

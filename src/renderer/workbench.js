@@ -1,7 +1,7 @@
 window.Workbench = (() => {
   'use strict';
   const D=window.DiaryV1;
-  let tab='upcoming', planToken=null, busy=false, category='', settingsInfo=null;
+  let tab='upcoming', planToken=null, busy=false, category='', settingsInfo=null, syncConflicts=[];
   const e=value=>String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const q=id=>document.getElementById(id);
   const styleName=value=>value==='light'?'轻提示':'全屏提醒';
@@ -110,6 +110,7 @@ window.Workbench = (() => {
   async function settings() {
     settingsInfo=await window.doneAPI.getDataStatus();
     const syncInfo=await window.doneAPI.getSyncStatus();
+    syncConflicts=syncInfo.signedIn ? await window.doneAPI.getSyncConflicts().catch(()=>[]) : [];
     const prefs=ui.state.preferences;
     q('settingsContent').innerHTML=`${!prefs.onboardingDone?'<div class="welcome-note"><strong>欢迎使用猫狗日记</strong><p>默认数据只保存在本机。预置习惯均未开启；如需跨设备使用，可在下方自行配置可选的云同步。</p><button id="finishWelcome" class="primary-button">知道了，开始使用</button></div>':''}
       ${settingsInfo.message?`<p class="form-error">${e(settingsInfo.message)}</p>`:''}
@@ -118,7 +119,8 @@ window.Workbench = (() => {
       <div class="dialog-grid"><label>勿扰开始<input type="time" data-settings-pref="quietStart" value="${prefs.quietStart || '22:00'}" /></label><label>勿扰结束<input type="time" data-settings-pref="quietEnd" value="${prefs.quietEnd || '08:00'}" /></label></div><p class="field-hint">当前快捷键${ui.state.quickShortcutAvailable?'已注册':'未注册或被其他软件占用'}。窗口内 Ctrl + K 仍可使用。</p>
       <h3>跨设备同步</h3><div class="sync-panel"><p class="field-hint">${syncInfo.signedIn?`已登录 ${e(syncInfo.email)} · ${syncInfo.lastSyncedAt?`上次同步 ${e(new Date(syncInfo.lastSyncedAt).toLocaleString('zh-CN'))}`:'尚未同步'} · 待上传 ${syncInfo.pending} 条`:'可选：使用 Supabase 将任务、习惯和专注记录同步到安卓。未配置时不会上传本机数据。'}</p>
       ${syncInfo.error?`<p class="form-error">上次同步未完成：${e(syncInfo.error)}</p>`:''}${!syncInfo.configured?'<div class="dialog-grid"><label>Supabase URL<input id="syncUrl" type="url" placeholder="https://你的项目.supabase.co" /></label><label>Publishable key<input id="syncPublishableKey" type="password" placeholder="仅保存到本机" /></label></div><button id="syncConfigure">保存同步配置</button>':''}
-      ${!syncInfo.signedIn?'<div class="dialog-grid"><label>邮箱<input id="syncEmail" type="email" placeholder="name@example.com" /></label><label>验证码<input id="syncOtp" inputmode="numeric" placeholder="邮箱中的验证码" /></label></div><div class="settings-buttons"><button id="syncSendOtp">发送验证码</button><button id="syncVerifyOtp" class="primary-button">验证并登录</button></div>':'<div class="settings-buttons"><button id="syncNow">立即同步</button><button id="syncLogout">退出账号</button><button id="syncDeleteAccount" class="danger-button">删除云端账号</button></div>'}</div>
+      ${!syncInfo.signedIn?'<div class="dialog-grid"><label>邮箱<input id="syncEmail" type="email" placeholder="name@example.com" /></label><label>验证码<input id="syncOtp" inputmode="numeric" placeholder="邮箱中的验证码" /></label></div><div class="settings-buttons"><button id="syncSendOtp">发送验证码</button><button id="syncVerifyOtp" class="primary-button">验证并登录</button></div>':'<div class="settings-buttons"><button id="syncNow">立即同步</button><button id="syncLogout">退出账号</button><button id="syncDeleteAccount" class="danger-button">删除云端账号</button></div>'}
+      ${syncConflicts.length?`<div class="sync-conflicts"><h4>需要你处理的同步冲突（${syncConflicts.length}）</h4><p class="field-hint">同一字段在不同设备被同时修改。请选择保留本机或云端内容，选择会立即同步。</p>${syncConflicts.slice(0,20).map(conflict=>`<div class="sync-conflict" data-conflict-id="${e(conflict.conflict_id||conflict.conflictId)}"><strong>${e(conflict.entity_type||conflict.entityType)} · ${e(conflict.entity_id||conflict.entityId)}</strong>${(conflict.conflict_fields||[]).map(field=>{const local=conflict.local_patch?.[field],remote=conflict.remote_payload?.[field];return `<div class="sync-conflict-field"><span>${e(field)}</span><button data-conflict-choice="local" data-conflict-id="${e(conflict.conflict_id||conflict.conflictId)}" data-conflict-field="${e(field)}">本机：${e(typeof local==='object'?JSON.stringify(local):local)}</button><button data-conflict-choice="remote" data-conflict-id="${e(conflict.conflict_id||conflict.conflictId)}" data-conflict-field="${e(field)}">云端：${e(typeof remote==='object'?JSON.stringify(remote):remote)}</button></div>`;}).join('')}</div>`).join('')}</div>`:''}</div>
       <h3>数据备份与恢复</h3><p class="field-hint">每日首次保存自动备份；恢复前保留原数据。备份含任务正文，请只发给信任的人。删除任务可从下方回收站找回。</p><div class="settings-buttons"><button id="backupNow">立即备份</button><button id="exportData">导出到文件</button><button id="importData">导入备份</button></div>
       <details><summary>本机备份（${settingsInfo.backups.length}）</summary><div class="backup-list">${settingsInfo.backups.slice(0,50).map(item=>`<div><span>${e(item.name)}</span><button data-restore-backup="${e(item.name)}">恢复</button></div>`).join('') || '<p>还没有备份。</p>'}</div></details>
       <details><summary>回收站（${ui.state.trash?.length || 0}）</summary>${(ui.state.trash || []).map(item=>`<div class="trash-row"><span>${e(item.task.title)}</span><button data-restore-task="${e(item.task.id)}">恢复任务</button></div>`).join('') || '<p>回收站是空的。</p>'}</details><h3>窗口与系统</h3>`;
@@ -207,6 +209,19 @@ window.Workbench = (() => {
         if(button.id==='syncNow'){const result=await window.doneAPI.syncNow();ui.state=result;await settings();renderAll();showToast(`同步完成：上传 ${result.syncResult?.pushed || 0} 条，下载 ${result.syncResult?.pulled || 0} 条`);}
         if(button.id==='syncLogout'){await window.doneAPI.logoutSync();await settings();showToast('已退出同步账号，本机数据保留');}
         if(button.id==='syncDeleteAccount'){if(await window.ThemeConfirm.ask({title:'删除云端账号？',message:'云端任务、习惯、专注记录和冲突记录会永久删除；本机数据不会删除。',confirmLabel:'删除云端账号',danger:true})){await window.doneAPI.deleteSyncAccount();await settings();showToast('云端账号已删除');}}
+        if(button.dataset.conflictChoice){
+          const conflict=syncConflicts.find(item=>String(item.conflict_id||item.conflictId)===String(button.dataset.conflictId));
+          const field=button.dataset.conflictField;
+          if(!conflict||!field) throw Error('冲突已变化，请刷新后重试');
+          const source=button.dataset.conflictChoice==='local'?conflict.local_patch:conflict.remote_payload;
+          const resolution={[field]:Object.prototype.hasOwnProperty.call(source||{},field)?source[field]:null};
+          await window.doneAPI.resolveSyncConflict(button.dataset.conflictId,resolution);
+          // Pull the server's resolved revision immediately so choosing the
+          // cloud value is reflected in the open workbench, not only after
+          // the next background sync tick.
+          ui.state=await window.doneAPI.syncNow();
+          await settings();renderAll();showToast('冲突已解决');
+        }
         if(button.id==='backupNow'){await window.doneAPI.backupData();await settings();showToast('备份已保存');}
         if(button.id==='exportData'){if(await window.doneAPI.exportData())showToast('数据已导出');}
         if(button.id==='importData')await confirmRestore(await window.doneAPI.previewImport());

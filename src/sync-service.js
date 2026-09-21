@@ -194,6 +194,39 @@ class SyncService {
     this.meta.session = null; this.meta.currentAccountId = null; this.meta.accounts = {}; this.save(); return this.status();
   }
 
+  async listConflicts() {
+    if (!this.meta.session) return [];
+    const query = '/rest/v1/sync_conflicts?status=eq.open&order=created_at.desc&limit=50';
+    const request = () => this.request(query, { accessToken: this.meta.session.accessToken });
+    try {
+      const rows = await request();
+      return Array.isArray(rows) ? rows : [];
+    } catch (error) {
+      if (!(await this.refreshSession())) throw error;
+      const rows = await this.request(query, { accessToken: this.meta.session.accessToken });
+      return Array.isArray(rows) ? rows : [];
+    }
+  }
+
+  async resolveConflict(conflictId, resolution) {
+    if (!this.meta.session) throw new Error('请先登录同步账号');
+    const id = String(conflictId || '').trim();
+    if (!id || !resolution || typeof resolution !== 'object' || Array.isArray(resolution)) throw new Error('冲突解决参数无效');
+    const existing = (await this.listConflicts()).find(item => String(item.conflict_id || item.conflictId) === id);
+    const body = { p_conflict_id: id, p_resolution: resolution };
+    const call = async () => this.request('/rest/v1/rpc/resolve_conflict', { method: 'POST', body, accessToken: this.meta.session.accessToken });
+    let result;
+    try { result = await call(); }
+    catch (error) {
+      if (!(await this.refreshSession())) throw error;
+      result = await call();
+    }
+    const account = this.account();
+    if (account) account.conflicts = (account.conflicts || []).filter(item => item.conflictId !== id && item.conflict_id !== id && (!existing?.mutation_id || item.mutationId !== existing.mutation_id));
+    this.save();
+    return result;
+  }
+
   async acquireFocusLease(sessionId, leaseSeconds = 90) {
     if (!this.meta.session) return true;
     const data = await this.request('/rest/v1/rpc/acquire_focus_lease', { method: 'POST', body: { p_device_id: this.meta.deviceId, p_session_id: sessionId, p_lease_seconds: leaseSeconds }, accessToken: this.meta.session.accessToken });
