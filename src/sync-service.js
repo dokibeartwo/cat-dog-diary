@@ -71,13 +71,17 @@ class SyncService {
     const id = this.meta.currentAccountId;
     if (!id) return null;
     this.meta.accounts[id] ||= { cursor: null, cursorEntity: '', entities: {}, outbox: [], conflicts: [], migrated: false, lastSyncedAt: null };
-    return this.meta.accounts[id];
+    const account = this.meta.accounts[id];
+    if (typeof account.migrated !== 'boolean') account.migrated = false;
+    account.entities ||= {}; account.outbox ||= []; account.conflicts ||= [];
+    return account;
   }
   status() {
     const account = this.account();
     return { configured: this.configured(), signedIn: Boolean(this.meta.session && account), email: this.meta.session?.email || '',
       accountId: this.meta.currentAccountId, deviceId: this.meta.deviceId, lastSyncedAt: account?.lastSyncedAt || null,
-      pending: account?.outbox?.length || 0, conflicts: account?.conflicts?.length || 0, error: this.meta.lastError || null };
+      pending: account?.outbox?.length || 0, conflicts: account?.conflicts?.length || 0,
+      needsMerge: Boolean(account && account.migrated === false), error: this.meta.lastError || null };
   }
 
   configure({ url, publishableKey } = {}) {
@@ -188,9 +192,47 @@ class SyncService {
     return { pushed: accepted.size, pulled: items, conflicts: account.conflicts.length, cursor: account.cursor };
   }
 
+  // Read the complete cloud snapshot without changing the device cursor or
+  // local state.  The first-login screen uses this to show a safe merge
+  // preview before anything is uploaded or replaced.
+  async previewCloud() {
+    const account = this.account(); if (!account || !this.meta.session) throw new Error('请先登录同步账号');
+    let access = this.meta.session.accessToken;
+    const call = async (pathname, options) => {
+      try { return await this.request(pathname, { ...options, accessToken: access }); }
+      catch (error) {
+        if (await this.refreshSession()) { access = this.meta.session.accessToken; return this.request(pathname, { ...options, accessToken: access }); }
+        throw error;
+      }
+    };
+    const entities = [];
+    let cursor = null; let cursorEntity = ''; let hasMore = true; let pages = 0;
+    while (hasMore && pages++ < 20) {
+      const page = await call('/rest/v1/rpc/pull_changes', {
+        method: 'POST', body: { p_cursor: cursor, p_cursor_entity: cursorEntity, p_limit: 500 }
+      });
+      entities.push(...(Array.isArray(page?.items) ? page.items : []));
+      hasMore = Boolean(page?.hasMore && page?.nextCursor);
+      if (page?.nextCursor) { cursor = page.nextCursor.updatedAt; cursorEntity = page.nextCursor.entity || ''; }
+    }
+    return { entities, accountId: this.meta.currentAccountId, generatedAt: iso() };
+  }
+
+  seedPreviewEntities(entities) {
+    const account = this.account(); if (!account) throw new Error('请先登录同步账号');
+    account.entities = {};
+    for (const item of Array.isArray(entities) ? entities : []) {
+      if (item?.entityType && item?.entityId) account.entities[`${item.entityType}|${item.entityId}`] = clone(item);
+    }
+    this.save();
+  }
+
   async deleteAccount() {
     if (!this.meta.session) throw new Error('请先登录同步账号');
-    await this.request('/rest/v1/rpc/delete_account', { method: 'POST', body: {}, accessToken: this.meta.session.accessToken });
+    try { await this.request('/rest/v1/rpc/delete_account', { method: 'POST', body: {}, accessToken: this.meta.session.accessToken }); }
+    catch (error) { if (!(await this.refreshSession())) throw error; await this.request('/rest/v1/rpc/delete_account', { method: 'POST', body: {}, accessToken: this.meta.session.accessToken }); }
+    const localSnapshot = this.account()?.localSnapshot || null;
+    if (localSnapshot) this.meta.pendingLocalSnapshot = clone(localSnapshot);
     this.meta.session = null; this.meta.currentAccountId = null; this.meta.accounts = {}; this.save(); return this.status();
   }
 

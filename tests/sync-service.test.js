@@ -60,3 +60,18 @@ test('sync service lists open conflicts and resolves a selected field', async ()
   assert.equal(service.account().conflicts.length, 0);
   assert.equal(calls.some(call => call.url.endsWith('/rpc/resolve_conflict')), true);
 });
+
+test('sync service previews cloud data without advancing the local cursor', async () => {
+  const service = new SyncService(tempFile(), { env: {}, fetchImpl: async (url) => {
+    if (url.endsWith('/auth/v1/verify')) return response({ access_token: 'access', refresh_token: 'refresh', user: { id: 'user-a', email: 'a@example.com' } });
+    if (url.endsWith('/rpc/pull_changes')) return response({ items: [{ entityType: 'task', entityId: 'remote', payload: { title: '云端任务' }, revision: 4, updatedAt: new Date().toISOString(), deletedAt: null }], nextCursor: null, hasMore: false });
+    throw new Error(`unexpected ${url}`);
+  }});
+  service.configure({ url: 'https://project.supabase.co', publishableKey: 'publishable-key-123' });
+  await service.verifyOtp('a@example.com', '123456');
+  service.account().cursor = '2026-01-01T00:00:00.000Z'; service.account().cursorEntity = 'task|old'; service.save();
+  const preview = await service.previewCloud();
+  assert.equal(preview.entities[0].entityId, 'remote');
+  assert.equal(service.account().cursor, '2026-01-01T00:00:00.000Z');
+  assert.equal(service.account().cursorEntity, 'task|old');
+});

@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld("doneAPI", {
   configureSync: (config) => ipcRenderer.invoke('sync:configure', config),
   sendSyncOtp: (email) => ipcRenderer.invoke('sync:send-otp', email),
   verifySyncOtp: (email, token) => ipcRenderer.invoke('sync:verify-otp', { email, token }),
+  previewSyncMerge: () => ipcRenderer.invoke('sync:preview'),
+  mergeSyncData: (strategy = 'merge', token = null) => ipcRenderer.invoke('sync:merge', { strategy, token }),
   syncNow: () => ipcRenderer.invoke('sync:now'),
   getSyncConflicts: () => ipcRenderer.invoke('sync:conflicts'),
   resolveSyncConflict: (conflictId, resolution) => ipcRenderer.invoke('sync:resolve-conflict', { conflictId, resolution }),

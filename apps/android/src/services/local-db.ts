@@ -1,7 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import type { LocalStore, SyncCursor, SyncEntity, SyncEntityType, SyncMutation } from '../core/sync/types';
 
-export type TaskRecord = { id: string; title: string; due?: string; dueAt?: string; done: boolean; notes?: string; updatedAt: string; nextReminderAt?: string | null; localNotificationId?: string | null; [key: string]: unknown };
+export type TaskRecord = { id: string; title: string; due?: string; dueAt?: string; completed: boolean; notes?: string; updatedAt: string; nextReminderAt?: string | null; localNotificationId?: string | null; [key: string]: unknown };
 export type LocalTask = TaskRecord;
 const db = SQLite.openDatabaseSync('cat-dog-diary.db');
 let initialized = false;
@@ -19,7 +19,8 @@ function init(): void {
 const now = () => new Date().toISOString();
 const json = (value: unknown) => JSON.stringify(value ?? {});
 function sanitizeTask(task: LocalTask): Record<string, unknown> {
-  const { nextReminderAt: _nextReminderAt, localNotificationId: _localNotificationId, ...durable } = task;
+  const { nextReminderAt: _nextReminderAt, localNotificationId: _localNotificationId, done: legacyDone, ...durable } = task as LocalTask & { done?: boolean };
+  if (durable.completed === undefined && legacyDone !== undefined) durable.completed = legacyDone;
   return durable;
 }
 
@@ -29,7 +30,14 @@ export async function loadTasks(accountId = 'local'): Promise<LocalTask[]> {
   // The sync payload deliberately omits the transport id. Re-attach the
   // SQLite primary key for the UI so toggling/editing a task never targets an
   // undefined id after a reload.
-  return rows.map((row) => ({ ...JSON.parse(row.payload), id: row.entity_id }) as LocalTask);
+  return rows.map((row) => {
+    const value = JSON.parse(row.payload) as Record<string, unknown>;
+    // The earliest Android preview called this field `done`; migrate it at
+    // the read boundary so all new writes follow the Windows/core contract.
+    if (value.completed === undefined && value.done !== undefined) value.completed = value.done;
+    delete value.done;
+    return ({ ...value, id: row.entity_id }) as LocalTask;
+  });
 }
 
 export function getDeviceId(): string {

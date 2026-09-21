@@ -1,7 +1,7 @@
 {
   "name": "cat-dog-diary",
   "productName": "猫狗日记",
-  "version": "1.1.0-beta.1",
+  "version": "1.1.0-beta.2",
   "description": "猫狗日记：带专注反馈、阶段规划和桌面提醒的待办软件。",
   "main": "src/main.js",
   "scripts": {
@@ -11,7 +11,7 @@
     "test": "node --test tests/*.test.js",
     "test:core": "node --test tests/sync-core.test.js tests/supabase-schema.test.js",
     "test:android": "node --test apps/android/tests/*.test.mjs",
-    "check": "node --check src/main.js && node --check src/preload.js && node --check src/sync-service.js && node --check src/renderer/app.js && node --check src/renderer/widget.js && node --check src/renderer/reminder.js && node --check src/renderer/focus.js && node --check src/shared/domain.js && node --check src/shared/runtime.js && node --check src/shared/productivity.js && node --check src/renderer/select-pop.js && node --check src/qa/productivity-qa.js && node --check src/renderer/themed-controls.js && node --check src/shared/controls.js && node --check src/qa/controls-widget-qa.js && node --check src/window-coordinator.js && node --check src/renderer/window-ready.js && node --check src/renderer/confirm-dialog.js && node --check src/qa/windows-stress.js && node --check packages/core/src/schema.js && node --check packages/core/src/migration.js && node --check packages/core/src/projection.js && node --check packages/core/src/local-store.js && node --check packages/core/src/sync-engine.js"
+    "check": "node --check src/main.js && node --check src/preload.js && node --check src/sync-service.js && node --check src/renderer/app.js && node --check src/renderer/workbench.js && node --check src/renderer/widget.js && node --check src/renderer/reminder.js && node --check src/renderer/focus.js && node --check src/shared/domain.js && node --check src/shared/runtime.js && node --check src/shared/productivity.js && node --check src/renderer/select-pop.js && node --check src/qa/productivity-qa.js && node --check src/renderer/themed-controls.js && node --check src/shared/controls.js && node --check src/qa/controls-widget-qa.js && node --check src/window-coordinator.js && node --check src/renderer/window-ready.js && node --check src/renderer/confirm-dialog.js && node --check src/qa/windows-stress.js && node --check packages/core/src/schema.js && node --check packages/core/src/migration.js && node --check packages/core/src/projection.js && node --check packages/core/src/local-store.js && node --check packages/core/src/sync-engine.js"
   },
   "keywords": [
     "todo",

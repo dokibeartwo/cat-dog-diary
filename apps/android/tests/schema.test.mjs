@@ -52,3 +52,13 @@ test('real Supabase keys are never committed in the Android source', () => {
   assert.match(env, /your-publishable-key/);
   assert.doesNotMatch(env, /eyJ[A-Za-z0-9_-]{20,}/);
 });
+
+test('first sync requires an explicit preview and uses the canonical completed field', () => {
+  const app = read('App.tsx');
+  const sync = read('src/services/sync.ts');
+  assert.match(app, /sync\.migrated/);
+  assert.match(app, /首次同步预览/);
+  assert.match(sync, /async preview\(\)/);
+  assert.match(sync, /async merge\(strategy/);
+  assert.doesNotMatch(app, /done: false/);
+});

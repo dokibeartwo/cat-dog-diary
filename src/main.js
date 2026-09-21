@@ -11,7 +11,9 @@ const diary = require('./shared/diary-v1.js');
 const {StateStore} = require('./state-store.js');
 const {WindowCoordinator}=require('./window-coordinator.js');
 const {assertTrustedSender,secureContents}=require('./security.js');
-const {SyncService, applyEntities}=require('./sync-service.js');
+const {SyncService, applyEntities, projectState}=require('./sync-service.js');
+const projectStateForState = value => projectState(value);
+const syncStateFingerprint = value => JSON.stringify([...projectStateForState(value).entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, item.payload]));
 
 let mainWindow;
 let widgetWindow;
@@ -30,6 +32,7 @@ let store;
 let syncService;
 let syncingRemote = false;
 let cloudSyncTimer;
+let syncMergePreview = null;
 let quickShortcutAvailable=false;
 let dayChecked=null;
 let schedulePreview=null;
@@ -366,8 +369,13 @@ function mutateState(mutator) {
   return publicState();
 }
 
-async function runCloudSync() {
+async function runCloudSync({ allowMerge = false } = {}) {
   if (!syncService?.status().signedIn) throw Error('请先在设置中登录同步账号');
+  if (syncService.status().needsMerge && !allowMerge) {
+    // Background timers must not pull a new account's data before the user
+    // has seen and confirmed the first-login merge preview.
+    return { ...publicState(), syncResult: { skipped: 'needs-merge', pushed: 0, pulled: 0, conflicts: 0 } };
+  }
   let result;
   try { result = await syncService.sync(); }
   catch (error) { syncService.meta.lastError = String(error.message || error); syncService.save(); throw error; }
@@ -1591,31 +1599,88 @@ function registerIpc() {
   ipcMain.handle('sync:send-otp', (_event, email) => syncService.sendOtp(email));
   ipcMain.handle('sync:verify-otp', async (_event, { email, token }) => {
     const oldAccountId = syncService.meta.currentAccountId || syncService.meta.lastAccountId || null;
-    if (syncService.meta.session && oldAccountId) syncService.saveLocalSnapshot(state);
+    if (oldAccountId) {
+      syncService.saveLocalSnapshot(state);
+      syncService.meta.pendingLocalSnapshot = structuredClone(state);
+      syncService.save();
+    }
     const result = await syncService.verifyOtp(email, token);
     const switchedAccount = Boolean(oldAccountId && oldAccountId !== result.accountId);
     if (switchedAccount) {
       // Never display account A's tasks while account B is being selected.
       // Restore B's local snapshot if one exists; otherwise show a clean local
       // state and let the first pull populate it.
-      state = normalizeState(syncService.localSnapshot() || createDefaultState());
+      state = normalizeState(syncService.localSnapshot() || syncService.meta.pendingLocalSnapshot || createDefaultState());
       if (!captureMode) saveState(state);
       broadcastState();
     }
-    const account = syncService.account();
-    if (account && !account.migrated) {
-      const empty = { tasks: [], habits: [], stagePlan: {}, focusHistory: [], preferences: {} };
-      if (!switchedAccount) syncService.capture(empty, state);
-      account.migrated = true;
-      syncService.save();
-    }
+    // Do not upload or replace data as a side effect of entering a code. The
+    // renderer requests a read-only cloud snapshot and asks the user how to
+    // merge it. This also makes account switching safe when the code belongs
+    // to a different person.
     return publicState();
   });
-  ipcMain.handle('sync:now', () => runCloudSync());
+  ipcMain.handle('sync:preview', async () => {
+    const preview = await syncService.previewCloud();
+    const localEntities = [...projectStateForState(state).values()];
+    const count = list => list.reduce((result, item) => { result[item.entityType] = (result[item.entityType] || 0) + 1; return result; }, {});
+    syncMergePreview = { ...preview, token: crypto.randomUUID(), accountId: syncService.meta.currentAccountId, localEntities, stateFingerprint: syncStateFingerprint(state) };
+    return { local: count(localEntities), cloud: count(preview.entities), cloudEntities: preview.entities.length,
+      localEntities: localEntities.length, generatedAt: preview.generatedAt, token: syncMergePreview.token };
+  });
+  ipcMain.handle('sync:merge', async (_event, input = {}) => {
+    const strategy = typeof input === 'string' ? input : input.strategy;
+    const token = typeof input === 'string' ? null : input.token;
+    if (!syncMergePreview || syncMergePreview.accountId !== syncService.meta.currentAccountId) throw new Error('同步预览已过期，请重新预览');
+    if (token && token !== syncMergePreview.token) throw new Error('同步预览已过期，请重新预览');
+    if (syncMergePreview.stateFingerprint !== syncStateFingerprint(state)) throw new Error('本机数据在预览后发生变化，请重新预览');
+    if (!['merge', 'local', 'cloud'].includes(strategy)) throw new Error('同步合并方式无效');
+    const cloudEntities = syncMergePreview.entities || [];
+    const cloudBase = normalizeState(applyEntities(createDefaultState(), cloudEntities));
+    syncService.seedPreviewEntities(cloudEntities);
+    let nextState;
+    if (strategy === 'cloud') nextState = cloudBase;
+    else if (strategy === 'local') nextState = normalizeState(state);
+    else {
+      // Merge keeps cloud-only records and lets the current device's records
+      // win where both sides have the same entity. The resulting diff is then
+      // uploaded with the cloud revision as its base, so concurrent edits are
+      // still protected by the normal conflict rules.
+      nextState = normalizeState(applyEntities(cloudBase, [...projectStateForState(state).values()]));
+    }
+    if (strategy !== 'cloud') syncService.capture(cloudBase, nextState);
+    else {
+      // Explicitly choosing the cloud snapshot also discards any unsent local
+      // mutations for this account; the local JSON is replaced by the cloud
+      // projection, while the durable backup remains available to export.
+      const account = syncService.account();
+      if (account) { account.outbox = []; account.conflicts = []; }
+      syncService.saveLocalSnapshot(nextState);
+    }
+    state = nextState;
+    const account = syncService.account(); if (account) account.migrated = strategy === 'cloud';
+    syncService.save();
+    if (!captureMode) saveState(state);
+    broadcastState(); resetReminderSchedule(); windows().sync();
+    let result = { pushed: 0, pulled: 0 };
+    if (strategy !== 'cloud') {
+      // Keep the preview open and the account marked as not migrated if the
+      // network fails; the user can retry without silently losing the choice.
+      result = (await runCloudSync({ allowMerge: true })).syncResult || result;
+      if (account) account.migrated = true;
+    }
+    delete syncService.meta.pendingLocalSnapshot;
+    syncMergePreview = null; syncService.save();
+    return { ...publicState(), syncMerge: { strategy, ...result } };
+  });
+  ipcMain.handle('sync:now', () => {
+    if (syncService?.status().needsMerge) throw new Error('请先完成首次同步预览，再开始同步');
+    return runCloudSync();
+  });
   ipcMain.handle('sync:conflicts', () => syncService?.listConflicts() || []);
   ipcMain.handle('sync:resolve-conflict', (_event, { conflictId, resolution }) => syncService?.resolveConflict(conflictId, resolution));
-  ipcMain.handle('sync:logout', () => syncService.logout());
-  ipcMain.handle('sync:delete-account', () => syncService.deleteAccount());
+  ipcMain.handle('sync:logout', () => { syncMergePreview = null; syncService.saveLocalSnapshot(state); return syncService.logout(); });
+  ipcMain.handle('sync:delete-account', () => { syncMergePreview = null; syncService.saveLocalSnapshot(state); return syncService.deleteAccount(); });
   ipcMain.handle("task:add", (_event, input) => mutateState((draft) => {
     const title = String(input.title || "").trim().slice(0, 120);
     if (!title) throw new Error("任务标题不能为空");
