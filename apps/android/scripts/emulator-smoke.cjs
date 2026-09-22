@@ -4,9 +4,10 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {findNode,keyboardShown,launcherDialog}=require('./ui-tree.cjs');
 const {startDynamicUi}=require('./dynamic-ui.cjs');
+const {captureFile,recordFailure}=require('./smoke-diagnostics.cjs');
 const out=path.join(__dirname,'..','smoke-output');fs.mkdirSync(out,{recursive:true});
 const packageName='com.dokibeartwo.catdogdiary',warnings=[],checks=[];
-const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000});
+const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000,maxBuffer:16*1024*1024});
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 let launcherDismissals=0,dynamicUi;
 async function xml(){
@@ -64,7 +65,7 @@ async function launch(){
   }
   throw Error('App did not render its brand within 45 seconds');
 }
-function screenshot(name){fs.writeFileSync(path.join(out,name+'.png'),execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000}));}
+function screenshot(name){captureFile(path.join(out,name+'.png'),'adb',['exec-out','screencap','-p']);}
 (async()=>{
   try{
     if(adb('shell','getprop','ro.kernel.qemu').trim()!=='1')throw Error('Smoke testing is allowed only on an isolated emulator');
@@ -132,6 +133,17 @@ function screenshot(name){fs.writeFileSync(path.join(out,name+'.png'),execFileSy
     if(/FATAL EXCEPTION[^]*?Process: com\.dokibeartwo\.catdogdiary|ReactNativeJS:.*(?:Error|TypeError|ReferenceError)/.test(log))throw Error('App native or JS runtime error; see device-log.txt');
     fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:true,api:35,checks,warnings},null,2));
     console.log('Installed APK smoke passed; screenshots captured. This is not physical-device notification validation.');
-  }catch(error){screenshot('failure');const tree=dynamicUi?await dynamicUi.source().catch(e=>`UI capture failed: ${e.message}`):'UI instrumentation unavailable';fs.writeFileSync(path.join(out,'failure-ui.xml'),tree);console.error('Visible diagnostic labels:',(tree.match(/(?:text|resource-id)="[^"]+"/g)||[]).join('\n').slice(-5000));fs.writeFileSync(path.join(out,'device-log.txt'),adb('logcat','-d'));fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:false,checks,warnings,error:error.message},null,2));throw error;}
+  }catch(error){
+    await recordFailure(out,{error,checks,warnings},{
+      screenshot:()=>screenshot('failure'),
+      async hierarchy(){
+        const tree=dynamicUi?await dynamicUi.source():'UI instrumentation unavailable';
+        fs.writeFileSync(path.join(out,'failure-ui.xml'),tree);
+        console.error('Visible diagnostic labels:',(tree.match(/(?:text|resource-id)="[^"]+"/g)||[]).join('\n').slice(-5000));
+      },
+      log:()=>captureFile(path.join(out,'device-log.txt'),'adb',['logcat','-d'])
+    });
+    throw error;
+  }
   finally{await dynamicUi?.close();}
 })().catch(error=>{console.error(error.message);process.exitCode=1;});
