@@ -66,6 +66,7 @@ async function launch(){
 function screenshot(name){fs.writeFileSync(path.join(out,name+'.png'),execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000}));}
 (async()=>{
   try{
+    if(adb('shell','getprop','ro.kernel.qemu').trim()!=='1')throw Error('Smoke testing is allowed only on an isolated emulator');
     dynamicUi=await startDynamicUi(out);
     adb('logcat','-c');await launch();screenshot('01-today');
     adb('shell','svc','wifi','disable');adb('shell','svc','data','disable');
@@ -85,10 +86,13 @@ function screenshot(name){fs.writeFileSync(path.join(out,name+'.png'),execFileSy
     await tap('专注');await tap('结束本轮',true);await tap('确认',true);
     await check('focus-finish-keeps-partial-history','提前结束');
     await tap('设置');await tap('星糖梦境');await tap('允许醒目通知',true);
-    const grant=findNode(await xml(),'Allow');
-    if(!grant||!grant.includes('permissioncontroller')||!grant.includes('permission_allow_button'))throw Error('Android notification permission dialog missing');
+    let grant;
+    await until('notification-permission-dialog',async()=>{
+      grant=findNode(await xml(),null,{resourceId:'com.android.permissioncontroller:id/permission_allow_button',packageName:'com.android.permissioncontroller'});
+      return !!grant;
+    });
     screenshot('06-notification-permission');await tapNode(grant);
-    await check('notification-permission-granted','通知权限：已允许');
+    await until('notification-permission-granted',async()=>(await xml()).includes('通知权限：已允许'));
     const exactAllowed=()=>/SCHEDULE_EXACT_ALARM:\s*allow\b/.test(adb('shell','appops','get',packageName,'SCHEDULE_EXACT_ALARM'));
     if(!exactAllowed()){
       await tap('闹钟和提醒权限',true);
@@ -106,7 +110,8 @@ function screenshot(name){fs.writeFileSync(path.join(out,name+'.png'),execFileSy
     // screen or replace its displayed occurrence time.
     const occurrence=(firstReminder.match(/text="([^"]*\d{1,2}:\d{2}:\d{2}[^"]*)"/)||[])[1];
     if(!occurrence)throw Error('Reminder occurrence time is not visible');
-    await delay(65000);
+    const keepUntil=Date.now()+65000;
+    while(Date.now()<keepUntil){await delay(10000);if(!(await xml()).includes(`text="${occurrence}"`))throw Error('Unacknowledged reminder occurrence changed');}
     const unchanged=await xml();
     if(!unchanged.includes(`text="${occurrence}"`)||!findNode(unchanged,'我知道了'))throw Error('Unacknowledged reminder was replaced');
     checks.push('unhandled-interval-keeps-same-occurrence');
@@ -126,6 +131,6 @@ function screenshot(name){fs.writeFileSync(path.join(out,name+'.png'),execFileSy
     if(/FATAL EXCEPTION[^]*?Process: com\.dokibeartwo\.catdogdiary|ReactNativeJS:.*(?:Error|TypeError|ReferenceError)/.test(log))throw Error('App native or JS runtime error; see device-log.txt');
     fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:true,api:35,checks,warnings},null,2));
     console.log('Installed APK smoke passed; screenshots captured. This is not physical-device notification validation.');
-  }catch(error){screenshot('failure');fs.writeFileSync(path.join(out,'failure-ui.xml'),dynamicUi?await dynamicUi.source().catch(e=>`UI capture failed: ${e.message}`):'UI instrumentation unavailable');fs.writeFileSync(path.join(out,'device-log.txt'),adb('logcat','-d'));fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:false,checks,warnings,error:error.message},null,2));throw error;}
+  }catch(error){screenshot('failure');const tree=dynamicUi?await dynamicUi.source().catch(e=>`UI capture failed: ${e.message}`):'UI instrumentation unavailable';fs.writeFileSync(path.join(out,'failure-ui.xml'),tree);console.error('Visible diagnostic labels:',(tree.match(/(?:text|resource-id)="[^"]+"/g)||[]).join('\n').slice(-5000));fs.writeFileSync(path.join(out,'device-log.txt'),adb('logcat','-d'));fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:false,checks,warnings,error:error.message},null,2));throw error;}
   finally{await dynamicUi?.close();}
 })().catch(error=>{console.error(error.message);process.exitCode=1;});

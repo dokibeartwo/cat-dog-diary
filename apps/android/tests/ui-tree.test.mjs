@@ -12,6 +12,15 @@ test('dynamic UiAutomator2 hierarchy keeps the same editable selector contract',
   const native=input.replace('<node','<android.widget.EditText');
   assert.equal(findNode(text+native,'这件事叫什么',{editable:true}),native);
 });
+test('system permission is identified by package and resource ID, not translated or uppercase text',()=>{
+  const grant='<android.widget.Button text="ALLOW" package="com.android.permissioncontroller" resource-id="com.android.permissioncontroller:id/permission_allow_button" enabled="true" clickable="true" bounds="[133,1211][947,1358]" />';
+  const options={resourceId:'com.android.permissioncontroller:id/permission_allow_button',packageName:'com.android.permissioncontroller'};
+  assert.equal(findNode(grant,null,options),grant);
+  assert.equal(findNode(grant.replace('ALLOW','允许'),null,options)?.includes('text="允许"'),true);
+  assert.equal(findNode(grant.replace('package="com.android.permissioncontroller"','package="unexpected.app"'),null,options),undefined);
+  assert.equal(findNode(grant.replace('permission_allow_button','permission_deny_button'),null,options),undefined);
+  assert.throws(()=>findNode(grant,null),/required/);
+});
 test('disabled or zero-size UI controls are not tapped',()=>{
   assert.equal(findNode(input.replace('enabled="true"','enabled="false"'),'这件事叫什么'),undefined);
   assert.equal(findNode(input.replace('[10,50][90,100]','[0,0][0,0]'),'这件事叫什么'),undefined);

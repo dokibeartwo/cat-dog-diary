@@ -1,9 +1,12 @@
 // Keep UI automation selectors separate so a label cannot masquerade as an input.
-function findNode(tree, label, {editable = false} = {}) {
+function findNode(tree, label, {editable = false, resourceId, packageName} = {}) {
+  if (label == null && !resourceId) throw Error('A label or exact resource ID is required');
   const matches = (tree.replaceAll('&apos;',"'").match(/<(?:node|[A-Za-z_][\w.$]*\.[\w.$]+)\b[^>]*>/g) || []).filter(node => {
     if (!node.includes('enabled="true"')) return false;
     if (editable && !node.includes('class="android.widget.EditText"')) return false;
-    if (!node.includes(`text="${label}"`) && !node.includes(`content-desc="${label}"`)) return false;
+    if (packageName && !node.includes(`package="${packageName}"`)) return false;
+    if (resourceId && !node.includes(`resource-id="${resourceId}"`)) return false;
+    if (label != null && !node.includes(`text="${label}"`) && !node.includes(`content-desc="${label}"`)) return false;
     const bounds = node.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
     return bounds && +bounds[3] > +bounds[1] && +bounds[4] > +bounds[2];
   });
