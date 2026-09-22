@@ -48,6 +48,11 @@ async function type(label,value){
   await delay(300);
 }
 async function check(label,content){if(!(await xml()).includes(content))throw Error(label);checks.push(label);}
+async function until(label,predicate,timeout=15000){
+  const end=Date.now()+timeout;
+  while(Date.now()<end){if(await predicate()){checks.push(label);return;}await delay(1500);}
+  throw Error(label);
+}
 async function launch(){
   adb('shell','am','start','-W','-n',`${packageName}/.MainActivity`);
   const end=Date.now()+45000;
@@ -75,6 +80,48 @@ function screenshot(name){fs.writeFileSync(path.join(out,name+'.png'),execFileSy
       await tap('设置');await tap(name,true);screenshot(`theme-${index+1}-settings`);
       await tap('今天');await check(`theme-${index+1}-usable`,'今天，专心做好一件事。');screenshot(`theme-${index+1}-today`);
     }
+    // Exercise real Android permission dialogs and elapsed time. Never inject
+    // notification records, alter the device clock, or grant permissions via adb.
+    await tap('专注');await tap('结束本轮',true);await tap('确认',true);
+    await check('focus-finish-keeps-partial-history','提前结束');
+    await tap('设置');await tap('星糖梦境');await tap('允许醒目通知',true);
+    const grant=findNode(await xml(),'Allow');
+    if(!grant||!grant.includes('permissioncontroller')||!grant.includes('permission_allow_button'))throw Error('Android notification permission dialog missing');
+    screenshot('06-notification-permission');await tapNode(grant);
+    await check('notification-permission-granted','通知权限：已允许');
+    const exactAllowed=()=>/SCHEDULE_EXACT_ALARM:\s*allow\b/.test(adb('shell','appops','get',packageName,'SCHEDULE_EXACT_ALARM'));
+    if(!exactAllowed()){
+      await tap('闹钟和提醒权限',true);
+      const setting=findNode(await xml(),'Allow setting alarms and reminders');
+      if(!setting?.includes('package="com.android.settings"'))throw Error('Android exact-alarm permission screen missing');
+      await tapNode(setting);await until('exact-alarm-user-setting',async()=>exactAllowed());
+      screenshot('07-exact-alarm-permission');adb('shell','input','keyevent','4');await delay(700);
+    }
+    await tap('坚持');await tap('＋ 添加每日坚持');
+    await type('每天想坚持的小事','Offline reminder QA');await type('间隔（分钟）','1');
+    await tap('保存每日坚持',true);await check('offline-habit-created','Offline reminder QA');
+    await until('foreground-reminder-delivered',async()=>{const tree=await xml();return tree.includes('Offline reminder QA')&&!!findNode(tree,'我知道了');},90000);
+    const firstReminder=await xml();fs.writeFileSync(path.join(out,'foreground-reminder-ui.xml'),firstReminder);screenshot('08-foreground-reminder');
+    // Leaving it unhandled beyond the next interval must not create another
+    // screen or replace its displayed occurrence time.
+    const occurrence=(firstReminder.match(/text="([^"]*\d{1,2}:\d{2}:\d{2}[^"]*)"/)||[])[1];
+    if(!occurrence)throw Error('Reminder occurrence time is not visible');
+    await delay(65000);
+    const unchanged=await xml();
+    if(!unchanged.includes(`text="${occurrence}"`)||!findNode(unchanged,'我知道了'))throw Error('Unacknowledged reminder was replaced');
+    checks.push('unhandled-interval-keeps-same-occurrence');
+    await tap('我知道了');await delay(5000);
+    if(findNode(await xml(),'我知道了'))throw Error('Acknowledged reminder immediately reappeared');
+    checks.push('acknowledgement-restarts-interval');
+    adb('shell','input','keyevent','3');await delay(1000);
+    adb('shell','cmd','statusbar','expand-notifications');
+    await until('background-system-notification-delivered',async()=>!!findNode(await xml(),'Offline reminder QA'),90000);
+    screenshot('09-background-notification');
+    fs.writeFileSync(path.join(out,'notification-diagnostics.txt'),adb('shell','dumpsys','notification','--noredact'));
+    adb('shell','cmd','statusbar','collapse');await launch();
+    await until('return-from-background-opens-reminder',async()=>!!findNode(await xml(),'我知道了'));
+    await tap('我知道了');await tap('坚持');await tap('暂停提醒',true);
+    await check('habit-paused','已暂停');
     const log=adb('logcat','-d');fs.writeFileSync(path.join(out,'device-log.txt'),log);
     if(/FATAL EXCEPTION[^]*?Process: com\.dokibeartwo\.catdogdiary|ReactNativeJS:.*(?:Error|TypeError|ReferenceError)/.test(log))throw Error('App native or JS runtime error; see device-log.txt');
     fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:true,api:35,checks,warnings},null,2));
