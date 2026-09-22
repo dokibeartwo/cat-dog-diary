@@ -1,5 +1,5 @@
 // Explicit maintainer command only. Never changes the stable release.
-// refresh-draft may replace only two known unpublished candidates, kept locally.
+// refresh-draft may replace only known unpublished candidates, kept locally.
 // node scripts/publish-offline-beta.cjs verify|stage|refresh-draft|publish <successful-smoke-run>
 const fs = require('node:fs');
 const path = require('node:path');
@@ -8,9 +8,9 @@ const {Readable} = require('node:stream');
 const {execFileSync} = require('node:child_process');
 const root = path.resolve(__dirname, '..');
 const repo = 'dokibeartwo/cat-dog-diary', tag = 'v1.1.0-beta.3';
-const sourceRun = '35703508129', sourceSha = 'd0d2a64d5a41503e47ee91ed22ded9853740d95b';
-const apkHash = 'af144f9f6ea4052a8668cbfa8f39f8497aef90f96e3f772fb76c169ccd6d05f6';
-const winHash = '668f0cf72cb3dbf4b2eebf03acfe4a930d9f9a0273fba7d6ef330c5de3f218e2';
+const sourceRun = '35752551991', sourceSha = 'a397ac0c6f63c3ad6b9c364d1684a9a4d787754a';
+const apkHash = '63d08798f433574d56f652067e438a4ed60051711b9d5c8253ac885dc14fb55d';
+const winHash = '89798511cb09ac925be0e8b340d8b88491f59a81d721e0fd54ab35b9c1e4ccf3';
 async function hash(file) {
   const digest = crypto.createHash('sha256');
   for await (const chunk of fs.createReadStream(file)) digest.update(chunk);
@@ -57,6 +57,9 @@ async function main() {
   const commit = execFileSync('git',['-c',`safe.directory=${root.replaceAll('\\','/')}`,'rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
   const remote = await api('commits/main');
   if (remote.sha !== commit) throw Error('Push the exact reviewed source before publishing');
+  const tagResponse=await fetch(`https://api.github.com/repos/${repo}/git/ref/tags/${tag}`,{headers,signal:AbortSignal.timeout(30000)});
+  if(tagResponse.ok){const existingTag=await tagResponse.json();if(existingTag.object?.type!=='commit'||existingTag.object.sha!==commit)throw Error('An existing tag differs; refusing to move it');}
+  else if(tagResponse.status!==404)throw Error(`Cannot verify release tag: ${tagResponse.status}`);
   let release = (await api('releases?per_page=100')).find(item=>item.tag_name===tag);
   if (release && !release.prerelease) throw Error('Refusing to modify a stable release');
   if (!release) release = await api('releases','POST',{tag_name:tag,target_commitish:commit,name:'猫狗日记 · Android 0.1.1 / Windows 1.1.0-beta.3 离线内测',body,draft:true,prerelease:true,make_latest:'false'});
@@ -68,6 +71,7 @@ async function main() {
     if (existing) {
       const superseded={
         'cat-dog-diary-android-0.1.1-internal.apk':'af144f9f6ea4052a8668cbfa8f39f8497aef90f96e3f772fb76c169ccd6d05f6',
+        'cat-dog-diary-1.1.0-beta.3-windows-x64.zip':'668f0cf72cb3dbf4b2eebf03acfe4a930d9f9a0273fba7d6ef330c5de3f218e2',
         'SHA256SUMS.txt':'9c89eba620276b692bb497f19b6489a63b8055696d611f0f5e8b161aeb00570e'
       };
       if(command==='refresh-draft'&&release.draft&&existing.digest===`sha256:${superseded[item.name]}`&&existing.digest!==`sha256:${item.sha256}`){

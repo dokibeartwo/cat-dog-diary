@@ -72,6 +72,10 @@ Windows 版在未配置同步时不联网，不需要注册账号，也不会上
 
 <img src="docs/screenshots/android/today.png" width="250" alt="安卓今天页面" /> <img src="docs/screenshots/android/focus.png" width="250" alt="安卓番茄钟" /> <img src="docs/screenshots/android/settings.png" width="250" alt="安卓主题与提醒设置" />
 
+前台全屏与后台通知（Android 15 模拟器，均为离线测试数据）：
+
+<img src="docs/screenshots/android/reminder.png" width="250" alt="实际到点的主题全屏提醒" /> <img src="docs/screenshots/android/notification.png" width="250" alt="切到后台后收到的系统通知" />
+
 目前先交付**离线内测**，无需创建 Supabase 项目或登录。手机任务和提醒保存在本机；暂不进行电脑与手机自动同步。Windows 内测包与稳定版数据隔离，双击后在程序文件夹旁创建“本地数据”（放在 E 盘就保存在 E 盘）；更新时保留该目录，里面的数据及备份不上传 GitHub。稳定版原数据目录和快捷方式不变。
 
 `apps/android` 是独立的 Expo/React Native 客户端，提供今天、任务、每日坚持、专注、六套主题和邮箱验证码登录。Windows 与 Android 的同步数据层使用 Supabase，采用本地优先策略：断网继续使用，联网后上传待处理变更并拉取云端变更；设备级提醒、离席状态、桌面小组件和正在运行的专注界面不会上传。
