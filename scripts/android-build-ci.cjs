@@ -17,6 +17,12 @@ async function main(){
     const id=process.argv[3];
     if(id){const run=await api(`actions/runs/${id}`),jobs=await api(`actions/runs/${id}/jobs`);console.log(JSON.stringify({id:run.id,status:run.status,conclusion:run.conclusion,url:run.html_url,jobs:jobs.jobs.map(j=>({name:j.name,status:j.status,conclusion:j.conclusion,steps:j.steps.map(s=>({name:s.name,status:s.status,conclusion:s.conclusion}))}))},null,2));}
     else{const runs=await api('actions/workflows/android-native.yml/runs?per_page=3');console.log(JSON.stringify(runs.workflow_runs.map(r=>({id:r.id,status:r.status,conclusion:r.conclusion,url:r.html_url,sha:r.head_sha})),null,2));}
-  }else throw Error('Expected dispatch or status');
+  }else if(process.argv[2]==='logs'){
+    const jobs=await api(`actions/runs/${process.argv[3]}/jobs`),job=jobs.jobs.find(j=>j.conclusion==='failure')||jobs.jobs[0];
+    if(!job)throw Error('No job yet');
+    const response=await fetch(`https://api.github.com/repos/${repository}/actions/jobs/${job.id}/logs`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(30000)});
+    if(!response.ok)throw Error(`Logs unavailable: ${response.status}`);
+    console.log((await response.text()).split('\n').slice(-130).join('\n'));
+  }else throw Error('Expected dispatch, status or logs');
 }
 main().catch(error=>{console.error(error.message);process.exitCode=1;});
