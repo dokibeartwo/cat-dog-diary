@@ -18,3 +18,10 @@ done-data*.json
 .env
 .env.*
 !.env.example
+apps/android/.expo/
+apps/android/android/
+apps/android/ios/
+apps/android/dist-android/
+*.keystore
+*.jks
+apps/android/smoke-output/

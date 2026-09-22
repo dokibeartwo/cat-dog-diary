@@ -4,8 +4,8 @@
 
 ## 部署
 
-1. 在 Supabase 创建一个新项目，并启用邮箱验证码登录。
-2. 使用 Supabase CLI 关联项目，再执行 `supabase db push`。
+1. 创建 Supabase 项目，启用邮箱认证。邮件模板用 `{{ .Token }}` 显示验证码，不要只发送 magic link。公开内测前配置自己的 SMTP 并检查投递限制。
+2. CLI 关联项目后执行 `supabase db push`，按时间顺序部署 `migrations` 全部文件；旧项目也要执行后续迁移，不要只运行第一份。
 3. 把项目 URL 和 publishable/anon key 放在本机环境变量或未提交的 `.env.local` 中。不要把 service-role key 放进 APK、EXE 或 Git。
 4. 客户端只调用迁移文件授予 authenticated 角色的 RPC；不要给客户端 service-role 权限。
 
@@ -38,3 +38,9 @@ EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=replace-with-your-publishable-key
 `EXPO_PUBLIC_` 变量会进入移动端包，因此只能放 publishable/anon key。任何 service-role key 都必须留在服务端环境。
 
 同步 mutation 的 `patch` 是本次修改的字段片段，同时带 `basePayload` 和 `baseRevision`。服务端会把不重叠的字段自动合并；同一字段发生并发修改时写入 `sync_conflicts`，客户端选择结果后再以新 revision 提交。`delete` 和 `restore` 也必须带当前 base revision。
+
+每批最多 100 个 mutation。已发送 ID 内容不可变；超时重试保持相同结果。微秒游标须作为原始字符串保存，不能经过 JavaScript Date 截断。冲突解决使用 `{expectedRevision, action, fields}`；过期选择返回 `resolved:false` 并刷新内容。
+
+迁移将同步实体加入 Realtime publication（若存在）。连接中断仍有定时拉取。专注租约最多覆盖一轮，避免后台无法频繁续租；登录状态新开一轮须联网确认。
+
+本地 `tests/backend-runtime.test.js` 在 PostgreSQL WASM 运行升级后的 RPC、RLS、冲突与租约。它不包含邮件发送、Auth 网关与真实手机网络，部署后仍须双账号／双设备实测。

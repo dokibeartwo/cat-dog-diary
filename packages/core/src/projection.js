@@ -200,8 +200,9 @@ function applyEntities(state = {}, entities) {
   next.tasks = Array.isArray(next.tasks) ? next.tasks : [];
   next.habits = Array.isArray(next.habits) ? next.habits : [];
   next.focusHistory = Array.isArray(next.focusHistory) ? next.focusHistory : [];
-  const list = entitiesArray(entities).map(validateEntity);
-  const stepChanges = new Set();
+  // A page is sorted by server cursor, not by parent/child dependency.
+  const order = { task: 0, habit: 0, step: 1, habit_event: 1, reminder_rule: 2 };
+  const list = entitiesArray(entities).map(validateEntity).sort((a, b) => (order[a.entityType] ?? 1) - (order[b.entityType] ?? 1));
 
   for (const item of list) {
     const { entityType: type, entityId: id, payload, deletedAt } = item;
@@ -218,7 +219,7 @@ function applyEntities(state = {}, entities) {
       }
       const local = index >= 0 ? next.tasks[index] : {};
       next.tasks[index >= 0 ? index : next.tasks.length] = {
-        ...payload, ...mergeLocal(local, LOCAL_TASK_FIELDS), id
+        ...taskPayload(payload), ...mergeLocal(local, LOCAL_TASK_FIELDS), steps: clone(local.steps || []), id
       };
     } else if (type === 'step') {
       const taskId = validId(payload.taskId, null);
@@ -229,12 +230,11 @@ function applyEntities(state = {}, entities) {
       const index = task.steps.findIndex(value => value?.id === id);
       if (deletedAt) { if (index >= 0) task.steps.splice(index, 1); }
       else task.steps[index >= 0 ? index : task.steps.length] = { ...payload, id };
-      stepChanges.add(taskId);
     } else if (type === 'habit') {
       const index = next.habits.findIndex(value => value?.id === id);
       if (deletedAt) { if (index >= 0) next.habits.splice(index, 1); continue; }
       const local = index >= 0 ? next.habits[index] : {};
-      next.habits[index >= 0 ? index : next.habits.length] = { ...payload, ...mergeLocal(local, LOCAL_HABIT_FIELDS), id };
+      next.habits[index >= 0 ? index : next.habits.length] = { ...habitPayload(payload), ...mergeLocal(local, LOCAL_HABIT_FIELDS), id };
     } else if (type === 'habit_event') {
       next.habitEvents = Array.isArray(next.habitEvents) ? next.habitEvents : [];
       const index = next.habitEvents.findIndex(value => value?.id === id);
@@ -256,6 +256,12 @@ function applyEntities(state = {}, entities) {
     } else if (type === 'reminder_rule') {
       next.reminderRules = Array.isArray(next.reminderRules) ? next.reminderRules : [];
       const index = next.reminderRules.findIndex(value => value?.id === id);
+      // These IDs are legacy projections of the task/habit fields, not a
+      // second authority. An older rule must never undo a new pause/edit.
+      if (id === `task:${payload.targetId}` || id === `habit:${payload.targetId}`) {
+        if (index >= 0) next.reminderRules.splice(index, 1);
+        continue;
+      }
       if (deletedAt) {
         if (index >= 0) next.reminderRules.splice(index, 1);
         const targetId = validId(payload.targetId, null);
@@ -294,8 +300,14 @@ function applyEntities(state = {}, entities) {
       }
     }
   }
-  // A task payload does not carry steps. If no step entities were in the
-  // change set, its local list is deliberately untouched.
+  for (const task of next.tasks) if (Array.isArray(task.steps)) task.steps.sort((a, b) => (a.position || 0) - (b.position || 0));
+  for (const habit of next.habits) {
+    const events = (next.habitEvents || []).filter(event => event.habitId === habit.id && event.completed !== false);
+    if (events.length) {
+      habit.completionCount = Math.max(Number(habit.completionCount) || 0, events.length);
+      habit.lastCompletedAt = events.map(event => event.occurredAt).filter(Boolean).sort().at(-1) || habit.lastCompletedAt;
+    }
+  }
   return next;
 }
 

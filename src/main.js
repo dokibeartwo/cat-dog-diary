@@ -12,6 +12,7 @@ const {StateStore} = require('./state-store.js');
 const {WindowCoordinator}=require('./window-coordinator.js');
 const {assertTrustedSender,secureContents}=require('./security.js');
 const {SyncService, applyEntities, projectState}=require('./sync-service.js');
+const syncJournal = require('../packages/core/src/replica');
 const projectStateForState = value => projectState(value);
 const syncStateFingerprint = value => JSON.stringify([...projectStateForState(value).entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => [key, item.payload]));
 
@@ -30,9 +31,12 @@ let lastScreenId = null;
 let state;
 let store;
 let syncService;
+let syncStartupError = '';
 let syncingRemote = false;
 let cloudSyncTimer;
 let syncMergePreview = null;
+let focusLeaseBusy = false;
+let focusLeaseDeadline = 0;
 let quickShortcutAvailable=false;
 let dayChecked=null;
 let schedulePreview=null;
@@ -304,6 +308,9 @@ function normalizeState(parsed) {
         schemaVersion: diary.SCHEMA,
         reminderHistory: parsed.reminderHistory,
         trash: parsed.trash,
+        categories: Array.isArray(parsed.categories) ? parsed.categories : [],
+        habitEvents: Array.isArray(parsed.habitEvents) ? parsed.habitEvents : [],
+        reminderRules: Array.isArray(parsed.reminderRules) ? parsed.reminderRules : [],
         tasks: Array.isArray(parsed.tasks) ? parsed.tasks.map(normalizeTask) : [],
         habits: (Array.isArray(parsed.habits) ? parsed.habits : DEFAULT_STATE.habits).map(normalizeHabit),
         stagePlan: { ...DEFAULT_STATE.stagePlan, ...parsed.stagePlan },
@@ -328,7 +335,7 @@ function saveState(next=state) {
 }
 
 function publicState() {
-  return {...structuredClone(state),appVersion:app.getVersion?.() || '1.0.0',presentation:windows().state(),dataStatus:{readOnly:Boolean(store?.readOnly),message:store?.issue || ''},sync:syncService?.status() || {configured:false,signedIn:false,pending:0,conflicts:0},quickShortcutAvailable};
+  return {...structuredClone(state),appVersion:app.getVersion?.() || '1.0.0',presentation:windows().state(),dataStatus:{readOnly:Boolean(store?.readOnly),message:store?.issue || ''},sync:syncService?.status() || {configured:false,signedIn:false,pending:0,conflicts:0,error:syncStartupError},quickShortcutAvailable};
 }
 
 function broadcastState() {
@@ -354,8 +361,17 @@ function mutateState(mutator) {
     if(child)prepareTaskReminder(child,true);
   }
   runtime.reconcile(draft);
-  if (!syncingRemote) syncService?.capture(state, draft);
+  // Completion events are durable; cumulative counters remain device-local.
+  for (const habit of draft.habits) {
+    const old = state.habits.find(item => item.id === habit.id);
+    if (habit.lastCompletedAt && habit.lastCompletedAt !== old?.lastCompletedAt) {
+      draft.habitEvents ||= [];
+      const id = `event-${habit.id}-${Date.parse(habit.lastCompletedAt)}`;
+      if (!draft.habitEvents.some(event => event.id === id)) draft.habitEvents.push({ id, habitId: habit.id, occurredAt: habit.lastCompletedAt, completed: true, source: 'windows' });
+    }
+  }
   if (!captureMode) saveState(draft);
+  if (!syncingRemote) syncService?.capture(state, draft);
   state = draft;
   if (state.focusTimer.status === 'idle') windows().finish();
   broadcastState();
@@ -389,13 +405,15 @@ async function runCloudSync({ allowMerge = false } = {}) {
       // now visible. It is used when the user later switches accounts; using
       // the pre-pull snapshot could otherwise re-show stale tasks.
       syncService.saveLocalSnapshot(state);
+      syncService.account().projectionPending = false;
+      syncService.save();
     } finally { syncingRemote = false; }
     dayChecked = null;
     resetReminderSchedule();
     broadcastState();
     windows().sync();
   }
-  return { ...publicState(), syncResult: { pushed: result.pushed, pulled: result.pulled?.length || 0, conflicts: result.conflicts || 0 } };
+  return { ...publicState(), syncResult: { pushed: result.pushed, pulled: result.downloaded || 0, conflicts: result.conflicts || 0 } };
 }
 
 function createTrayImage() {
@@ -1594,8 +1612,8 @@ function registerIpc() {
   // Every handler in this registration block passes through the same gate.
   const ipcMain={handle:registerTrustedIpc};
   ipcMain.handle("state:get", () => publicState());
-  ipcMain.handle('sync:status', () => syncService?.status() || { configured: false, signedIn: false, pending: 0, conflicts: 0 });
-  ipcMain.handle('sync:configure', (_event, config) => syncService.configure(config));
+  ipcMain.handle('sync:status', () => syncService?.status() || { configured: false, signedIn: false, pending: 0, conflicts: 0, error: syncStartupError });
+  ipcMain.handle('sync:configure', (_event, config) => { if(!syncService)throw Error(syncStartupError||'同步服务不可用');return syncService.configure(config); });
   ipcMain.handle('sync:send-otp', (_event, email) => syncService.sendOtp(email));
   ipcMain.handle('sync:verify-otp', async (_event, { email, token }) => {
     const oldAccountId = syncService.meta.currentAccountId || syncService.meta.lastAccountId || null;
@@ -1610,7 +1628,7 @@ function registerIpc() {
       // Never display account A's tasks while account B is being selected.
       // Restore B's local snapshot if one exists; otherwise show a clean local
       // state and let the first pull populate it.
-      state = normalizeState(syncService.localSnapshot() || syncService.meta.pendingLocalSnapshot || createDefaultState());
+      state = normalizeState(syncService.localSnapshot() || { ...createDefaultState(), tasks: [], habits: [], categories: [], habitEvents: [], focusHistory: [], preferences: state.preferences });
       if (!captureMode) saveState(state);
       broadcastState();
     }
@@ -1623,54 +1641,31 @@ function registerIpc() {
   ipcMain.handle('sync:preview', async () => {
     const preview = await syncService.previewCloud();
     const localEntities = [...projectStateForState(state).values()];
-    const count = list => list.reduce((result, item) => { result[item.entityType] = (result[item.entityType] || 0) + 1; return result; }, {});
+    const count = list => list.filter(item => !item.deletedAt).reduce((result, item) => { result[item.entityType] = (result[item.entityType] || 0) + 1; return result; }, {});
     syncMergePreview = { ...preview, token: crypto.randomUUID(), accountId: syncService.meta.currentAccountId, localEntities, stateFingerprint: syncStateFingerprint(state) };
-    return { local: count(localEntities), cloud: count(preview.entities), cloudEntities: preview.entities.length,
+    return { local: count(localEntities), cloud: count(preview.entities), cloudEntities: preview.entities.filter(item => !item.deletedAt).length,
       localEntities: localEntities.length, generatedAt: preview.generatedAt, token: syncMergePreview.token };
   });
   ipcMain.handle('sync:merge', async (_event, input = {}) => {
     const strategy = typeof input === 'string' ? input : input.strategy;
     const token = typeof input === 'string' ? null : input.token;
     if (!syncMergePreview || syncMergePreview.accountId !== syncService.meta.currentAccountId) throw new Error('同步预览已过期，请重新预览');
-    if (token && token !== syncMergePreview.token) throw new Error('同步预览已过期，请重新预览');
+    if (!token || token !== syncMergePreview.token || syncMergePreview.epoch !== syncService.epoch || Date.now() - Date.parse(syncMergePreview.generatedAt) > 600000) throw new Error('同步预览已过期，请重新预览');
     if (syncMergePreview.stateFingerprint !== syncStateFingerprint(state)) throw new Error('本机数据在预览后发生变化，请重新预览');
-    if (!['merge', 'local', 'cloud'].includes(strategy)) throw new Error('同步合并方式无效');
+    if (strategy !== 'merge') throw new Error('内测版仅支持保留双方内容的安全合并');
     const cloudEntities = syncMergePreview.entities || [];
-    const cloudBase = normalizeState(applyEntities(createDefaultState(), cloudEntities));
-    syncService.seedPreviewEntities(cloudEntities);
-    let nextState;
-    if (strategy === 'cloud') nextState = cloudBase;
-    else if (strategy === 'local') nextState = normalizeState(state);
-    else {
-      // Merge keeps cloud-only records and lets the current device's records
-      // win where both sides have the same entity. The resulting diff is then
-      // uploaded with the cloud revision as its base, so concurrent edits are
-      // still protected by the normal conflict rules.
-      nextState = normalizeState(applyEntities(cloudBase, [...projectStateForState(state).values()]));
-    }
-    if (strategy !== 'cloud') syncService.capture(cloudBase, nextState);
-    else {
-      // Explicitly choosing the cloud snapshot also discards any unsent local
-      // mutations for this account; the local JSON is replaced by the cloud
-      // projection, while the durable backup remains available to export.
-      const account = syncService.account();
-      if (account) { account.outbox = []; account.conflicts = []; }
-      syncService.saveLocalSnapshot(nextState);
-    }
-    state = nextState;
-    const account = syncService.account(); if (account) account.migrated = strategy === 'cloud';
-    syncService.save();
+    if (!captureMode) store.backup('before-first-sync');
+    const replica = syncJournal.prepareMerge(syncMergePreview.localEntities, cloudEntities, () => `${syncService.meta.deviceId}:${crypto.randomUUID()}`, syncService.meta.deviceId);
+    const account = syncService.account();
+    account.mergeBackup = { createdAt: new Date().toISOString(), state: structuredClone(state), outbox: structuredClone(account.outbox) };
+    account.entities = replica.remote; account.outbox = replica.outbox; account.migrated = true; account.cursor = null; account.cursorEntity = '';
+    account.projectionPending = true; syncService.save();
+    state = normalizeState(applyEntities(state, syncJournal.materialize(replica)));
     if (!captureMode) saveState(state);
     broadcastState(); resetReminderSchedule(); windows().sync();
-    let result = { pushed: 0, pulled: 0 };
-    if (strategy !== 'cloud') {
-      // Keep the preview open and the account marked as not migrated if the
-      // network fails; the user can retry without silently losing the choice.
-      result = (await runCloudSync({ allowMerge: true })).syncResult || result;
-      if (account) account.migrated = true;
-    }
     delete syncService.meta.pendingLocalSnapshot;
     syncMergePreview = null; syncService.save();
+    const result = (await runCloudSync()).syncResult;
     return { ...publicState(), syncMerge: { strategy, ...result } };
   });
   ipcMain.handle('sync:now', () => {
@@ -1678,6 +1673,7 @@ function registerIpc() {
     return runCloudSync();
   });
   ipcMain.handle('sync:conflicts', () => syncService?.listConflicts() || []);
+  ipcMain.handle('sync:pause', (_event, paused) => { const account = syncService.account(); if (!account) throw Error('请先登录'); account.paused = Boolean(paused); syncService.save(); return syncService.status(); });
   ipcMain.handle('sync:resolve-conflict', (_event, { conflictId, resolution }) => syncService?.resolveConflict(conflictId, resolution));
   ipcMain.handle('sync:logout', () => { syncMergePreview = null; syncService.saveLocalSnapshot(state); return syncService.logout(); });
   ipcMain.handle('sync:delete-account', () => { syncMergePreview = null; syncService.saveLocalSnapshot(state); return syncService.deleteAccount(); });
@@ -1974,6 +1970,7 @@ function registerIpc() {
     if (command?.presentation !== undefined && !['fullscreen','keep'].includes(command.presentation)) throw new Error('无效的专注显示方式');
     const currentTimer = state?.focusTimer;
     if (command?.taskId && currentTimer?.status !== 'idle' && currentTimer.taskId !== command.taskId) throw new Error('请先结束当前专注，再切换任务');
+    const execute = (leasedSessionId = null) => {
     let appliedCommand=false;
     const result = mutateState((draft) => {
       const now = Date.now();
@@ -1989,6 +1986,7 @@ function registerIpc() {
       const oldSession = draft.focusTimer.sessionId;
       const applied = runtime.updateFocus(draft.focusTimer, command, now);
       if (!applied) return;
+      if(command.action==='start' && leasedSessionId)timer.sessionId=leasedSessionId;
       appliedCommand=true;
       if (command.action === "start") {
         if (oldStatus !== 'running') productivity.beginTracking(timer, targetTask, now, oldStatus === 'idle');
@@ -2004,19 +2002,26 @@ function registerIpc() {
       reminderWindow?.hide();
     }
     if(appliedCommand&&command.action==='start'&&command.presentation!=='keep')windows().requestFull();
-    if (appliedCommand && command.action === 'start' && syncService?.status().signedIn) {
-      return syncService.acquireFocusLease(state.focusTimer.sessionId).then((leaseOk) => {
-        if (!leaseOk) {
-          mutateState((draft) => runtime.updateFocus(draft.focusTimer, { action: 'stop', sessionId: draft.focusTimer.sessionId }));
-          throw Error('此账号正在另一台设备专注，请先结束另一台设备的专注');
-        }
-        showNextBigReminder();
-        return publicState();
-      });
-    }
     if (appliedCommand && ['stop', 'reset'].includes(command.action) && syncService?.status().signedIn) syncService.releaseFocusLease(command.sessionId || null).catch(() => undefined);
     showNextBigReminder();
     return publicState();
+    };
+    if(command?.action==='start' && syncService?.status().signedIn) {
+      if(focusLeaseBusy)throw Error('正在确认跨设备专注状态，请稍候');
+      const before=JSON.stringify(state.focusTimer), candidate=structuredClone(state.focusTimer);
+      if(!runtime.updateFocus(candidate,command))return publicState();
+      const seconds=domain.getFocusRemainingSeconds(candidate)+120;
+      const epoch=syncService.epoch;focusLeaseBusy=true;
+      return syncService.acquireFocusLease(candidate.sessionId,seconds).then(ok=>{
+        if(!ok)throw Error('此账号正在另一台设备专注，请先结束另一台设备的专注');
+        if(epoch!==syncService.epoch||before!==JSON.stringify(state.focusTimer)) {
+          syncService.releaseFocusLease(candidate.sessionId).catch(()=>undefined);throw Error('计时状态已变化，请重试');
+        }
+        focusLeaseDeadline=Date.now()+seconds*1000;
+        return execute(candidate.sessionId);
+      }).finally(()=>{focusLeaseBusy=false;});
+    }
+    return execute();
   });
   ipcMain.handle("window:show-main", () => showMainWindow());
   ipcMain.handle("window:toggle-widget", () => toggleWidget());
@@ -2025,8 +2030,19 @@ function registerIpc() {
 }
 
 app.whenReady().then(() => {
-  syncService = new SyncService(path.join(app.getPath('userData'), 'sync-state.json'));
+  try { syncService = new SyncService(path.join(app.getPath('userData'), 'sync-state.json'), { sqlite: !isolatedMode, secureStorage: require('electron').safeStorage }); }
+  catch(error) { syncStartupError=String(error.message); syncService=null; }
   state = isolatedMode ? releaseSmokeMode&&process.argv.includes('--qa-clean') ? createDefaultState() : normalizeState(createCaptureState()) : loadState();
+  if(!isolatedMode && syncService) {
+    const account=syncService.account(syncService.meta.currentAccountId||syncService.meta.lastAccountId);
+    if(account?.localSnapshot&&!account.projectionPending)syncService.capture(account.localSnapshot,state);
+  }
+  if(!isolatedMode && syncService?.account()?.projectionPending) {
+    const account=syncService.account();
+    if(account.localSnapshot)syncService.capture(account.localSnapshot,state);
+    state=normalizeState(applyEntities(state,syncJournal.materialize({remote:account.entities,outbox:account.outbox})));
+    saveState(state);syncService.saveLocalSnapshot(state);account.projectionPending=false;syncService.save();
+  }
   if(stabilityQaMode||v1QaMode||releaseSmokeMode){state.habits.forEach(item=>item.active=false);state.tasks.forEach(item=>{item.reminderActive=false;item.deadlineDate=null;});}
   state.focusTimer = runtime.normalizeFocus(state.focusTimer);
   if (state.focusTimer.status === 'running' && !state.focusTimer.startedAt && domain.getFocusRemainingSeconds(state.focusTimer) > 0) productivity.beginTracking(state.focusTimer, null);
@@ -2039,12 +2055,26 @@ app.whenReady().then(() => {
   createTray();
   registerQuickShortcut();
   powerMonitor?.on('resume',()=>{dayChecked=null;precisionTick();if(syncService?.status().signedIn)runCloudSync().catch(()=>undefined);});
+  setInterval(()=>{
+    const timer=state.focusTimer;
+    if(isolatedMode||!syncService?.status().signedIn||timer.status==='idle')return;
+    const id=timer.sessionId,seconds=timer.status==='running'?domain.getFocusRemainingSeconds(timer)+120:90;
+    syncService.acquireFocusLease(id,seconds).then(ok=>{
+      if(state.focusTimer.sessionId!==id)return;
+      if(!ok)throw Error('另一设备已接管专注');
+      focusLeaseDeadline=Date.now()+seconds*1000;
+    }).catch(()=>{
+      if(state.focusTimer.sessionId===id && state.focusTimer.status==='running' && Date.now()>focusLeaseDeadline)mutateState(draft=>{
+        productivity.closeSegment(draft.focusTimer,Date.now());runtime.updateFocus(draft.focusTimer,{action:'pause',sessionId:id});
+      });
+    });
+  },30000);
   resetReminderSchedule();
   startPrecisionSchedule();
   if (!isolatedMode) cloudSyncTimer = setInterval(() => {
-    if (syncService?.status().signedIn && (syncService.status().pending || 0) > 0) runCloudSync().catch(() => undefined);
+    if (syncService?.status().signedIn && !syncService.status().paused) runCloudSync().catch(() => undefined);
   }, 60_000);
-  if (!isolatedMode && syncService.status().signedIn) {
+  if (!isolatedMode && syncService?.status().signedIn) {
     setTimeout(() => runCloudSync().catch(error => writeWindowLog({ event: 'sync-error', message: String(error.message || error) })), 2_000);
   }
   if(releaseSmokeMode){

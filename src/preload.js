@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld("doneAPI", {
   previewSyncMerge: () => ipcRenderer.invoke('sync:preview'),
   mergeSyncData: (strategy = 'merge', token = null) => ipcRenderer.invoke('sync:merge', { strategy, token }),
   syncNow: () => ipcRenderer.invoke('sync:now'),
+  pauseSync: (paused) => ipcRenderer.invoke('sync:pause', paused),
   getSyncConflicts: () => ipcRenderer.invoke('sync:conflicts'),
   resolveSyncConflict: (conflictId, resolution) => ipcRenderer.invoke('sync:resolve-conflict', { conflictId, resolution }),
   logoutSync: () => ipcRenderer.invoke('sync:logout'),

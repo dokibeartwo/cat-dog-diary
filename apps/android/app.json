@@ -2,7 +2,7 @@
   "expo": {
     "name": "猫狗日记",
     "slug": "cat-dog-diary",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "catdogdiary",
@@ -16,12 +16,11 @@
     },
     "android": {
       "package": "com.dokibeartwo.catdogdiary",
-      "versionCode": 1,
+      "versionCode": 2,
       "permissions": [
         "POST_NOTIFICATIONS",
         "VIBRATE",
         "SCHEDULE_EXACT_ALARM",
-        "USE_FULL_SCREEN_INTENT",
         "RECEIVE_BOOT_COMPLETED",
         "WAKE_LOCK"
       ],
@@ -40,11 +39,6 @@
         }
       ],
       "expo-sqlite"
-    ],
-    "extra": {
-      "eas": {
-        "projectId": ""
-      }
-    }
+    ]
   }
 }

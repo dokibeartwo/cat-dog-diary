@@ -40,6 +40,7 @@ export type LocalStore = {
 };
 
 export type SyncAdapter = {
-  push(mutations: SyncMutation[]): Promise<{ accepted: string[]; conflicts: SyncEntity[] }>;
-  pull(cursor: SyncCursor): Promise<{ entities: SyncEntity[]; cursor: SyncCursor }>;
+  identity(): Promise<string>;
+  push(mutations: SyncMutation[]): Promise<{ mutationId: string; status: string; [key: string]: unknown }[]>;
+  pull(cursor: SyncCursor): Promise<{ entities: SyncEntity[]; cursor: SyncCursor; hasMore: boolean }>;
 };

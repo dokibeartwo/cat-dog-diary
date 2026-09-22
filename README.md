@@ -2,9 +2,9 @@
 
 一款本地优先的 Windows 待办、提醒与番茄钟应用。它把“随手记下来、按时提醒、专心做完”放在同一个界面里，并保留六套猫狗主题、全屏提醒和透明桌面小组件。
 
-> Windows 稳定版：**1.0.0** · Android 同步内测：**1.1.0-beta.2** · 默认本地优先 · 无遥测
+> Windows 稳定版：**1.0.0** · Android 同步内测：**1.1.0-beta.3** · 默认本地优先 · 无遥测
 
-[下载 1.0.0](https://github.com/dokibeartwo/cat-dog-diary/releases/tag/v1.0.0)　·　[使用说明](使用说明.md)　·　[隐私说明](PRIVACY.md)　·　[1.1.0-beta.2说明](RELEASE-1.1.0-BETA.1.md)　·　[1.0.0版本说明](RELEASE-1.0.0.md)
+[下载 1.0.0](https://github.com/dokibeartwo/cat-dog-diary/releases/tag/v1.0.0)　·　[使用说明](使用说明.md)　·　[隐私说明](PRIVACY.md)　·　[同步内测进展](RELEASE-1.1.0-BETA.3.md)　·　[1.0.0版本说明](RELEASE-1.0.0.md)
 
 ![猫狗日记今天工作台](docs/screenshots/today.png)
 
@@ -70,11 +70,11 @@ Windows 版在未配置同步时不联网，不需要注册账号，也不会上
 
 `apps/android` 是独立的 Expo/React Native 客户端，提供今天、任务、每日坚持、专注、六套主题和邮箱验证码登录。Windows 与 Android 的同步数据层使用 Supabase，采用本地优先策略：断网继续使用，联网后上传待处理变更并拉取云端变更；设备级提醒、离席状态、桌面小组件和正在运行的专注界面不会上传。
 
-内测需要自行创建 Supabase 项目并执行 [`supabase/migrations/20260921000000_sync.sql`](supabase/migrations/20260921000000_sync.sql)，再把项目 URL 和 publishable key 写入本地配置（参考 [`.env.example`](.env.example)，不要提交真实密钥）。邮箱验证码、任务数据、习惯和专注历史会存入该项目；设置中可导出本机数据、退出账号或删除云端账号。服务端依赖 RLS，客户端不使用 service role key。
+内测需要自行创建 Supabase 项目并按时间顺序执行 [`supabase/migrations`](supabase/migrations) 中全部 SQL 迁移，再把项目 URL 和 publishable key 写入本地配置（参考 [`.env.example`](.env.example)，不要提交真实密钥）。邮箱验证码、任务数据、习惯和专注历史会存入该项目；设置中可导出本机数据、退出账号或删除云端账号。服务端依赖 RLS，客户端不使用 service role key。
 
-首次登录不会自动上传或覆盖数据。验证邮箱后，设置页会显示本机与云端记录数量，选择“合并”“使用云端”或“使用本机”后才执行同步；预览本身不会推进同步游标，也不会修改任一侧数据。若中途退出，重新打开设置即可继续预览。
+首次登录不会自动上传或覆盖数据。验证邮箱后，设置页会显示本机与云端记录数量，选择“备份并合并”后才执行同步（不提供破坏性的整库覆盖）；预览本身不会推进同步游标，也不会修改任一侧数据。若中途退出，重新打开设置即可继续预览。
 
-Android 会请求通知、震动和精确闹钟权限，使用高重要性锁屏通知；应用在前台可以显示主题化提醒。Android 14 对后台全屏通知有系统限制，普通待办不能保证在所有品牌上强制全屏，详见 [`apps/android/README.md`](apps/android/README.md)。首次登录会先显示本机/云端数据预览，确认后才合并。当前工作区未配置真实 Supabase 项目，且未安装 Android SDK/Expo EAS，因此尚未生成可下载 APK；源码可直接作为 GitHub 内测基线。
+Android 会请求通知、震动和精确闹钟权限，使用高重要性锁屏通知；应用在前台可以显示主题化提醒。Android 14 对后台全屏通知有系统限制，普通待办不能保证在所有品牌上强制全屏，详见 [`apps/android/README.md`](apps/android/README.md)。首次登录会先显示本机/云端数据预览，确认后才合并。真实邮箱与双设备云端验收需要部署自己的 Supabase 项目。可从 Actions 手动执行 `Android native internal APK`，构建自包含内测 APK；不需要 Expo 付费服务。构建产物和模拟器截图在对应运行的 Artifacts 中，不等同于已完成真机验收。
 
 ## 从源码运行
 

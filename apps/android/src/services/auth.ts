@@ -16,7 +16,7 @@ export async function verifyEmailCode(email: string, token: string): Promise<voi
   if (error) throw error;
 }
 
-export async function signOut(): Promise<void> { if (supabase) await supabase.auth.signOut(); }
+export async function signOut(): Promise<void> { if (supabase) { const {error}=await supabase.auth.signOut({scope:'local'}); if(error) throw error; } }
 
 export async function getAuthState(): Promise<AuthState> {
   if (!supabase) return { email: '', signedIn: false, configured: false };

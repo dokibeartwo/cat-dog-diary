@@ -1,0 +1,75 @@
+name: Android native internal APK
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/android/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: android-actions/setup-android@v3
+      - name: Install and verify
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm run check
+          cd apps/android
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm test
+          npm run verify:config
+      - name: Generate Android native project
+        working-directory: apps/android
+        run: npm run prebuild
+      - name: Compile self-contained internal APK
+        working-directory: apps/android/android
+        # Expo template signs release with its debug key unless an owner key
+        # is explicitly configured. This artifact is INTERNAL, not a stable
+        # public release. It embeds JS and does not need a Metro dev server.
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64
+      - name: Upload internal APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cat-dog-diary-android-internal
+          path: apps/android/android/app/build/outputs/apk/release/*.apk
+          retention-days: 14
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Installed APK smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install apps/android/android/app/build/outputs/apk/release/app-release.apk
+            node apps/android/scripts/emulator-smoke.cjs
+      - name: Save APK screenshots and device diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cat-dog-diary-android-smoke
+          path: apps/android/smoke-output
+          if-no-files-found: ignore
+          retention-days: 14

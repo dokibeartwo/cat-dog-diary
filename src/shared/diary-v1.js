@@ -160,11 +160,14 @@
     if (!task.completed || task.recurrenceNextId) return null;
     const next = nextOccurrence(task, now);
     if (!next) return null;
-    const id = makeId(); task.recurrenceNextId = id;
+    // Both offline devices must create the SAME next occurrence and steps.
+    const stableId = text => { let a=2166136261,b=5381; for(const ch of text){a=Math.imul(a^ch.charCodeAt(0),16777619);b=Math.imul(b,33)^ch.charCodeAt(0);}return `${(a>>>0).toString(16)}${(b>>>0).toString(16)}`; };
+    const id = `occ-${stableId(`${task.seriesId||task.id}|${next.dueAt||next.planDate}`)}`; task.recurrenceNextId = id;
+    if(state.tasks.some(item=>item.id===id))return null;
     const child = { ...structuredClone(task), id, ...next, recurrence: { ...task.recurrence, anchorDay: next.anchorDay },
       seriesId: task.seriesId || task.id, recurrenceNextId: null, completed: false, completedAt: null, createdAt: new Date(now).toISOString(),
       priorityDate: null, deadlineDate: null, deadlineLastRemindedDate: null, nextReminderAt: null, reminderFiredForDueAt: null,
-      steps: (task.steps || []).map(step => ({ ...step, id: makeId(), completed: false })) };
+      steps: (task.steps || []).map(step => ({ ...step, id: `step-${stableId(`${id}|${step.id}`)}`, completed: false, completedAt:null })) };
     delete child.anchorDay;
     state.tasks.push(child); return child;
   }

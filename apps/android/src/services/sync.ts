@@ -1,125 +1,107 @@
-import type { LocalStore, SyncAdapter, SyncCursor, SyncEntity, SyncEntityType, SyncMutation } from '../core/sync/types';
+import type { SyncAdapter, SyncCursor, SyncEntity, SyncMutation } from '../core/sync/types';
 import { supabase } from './supabase';
-
-const ENTITY_TYPES: SyncEntityType[] = ['task', 'step', 'habit', 'habit_event', 'category', 'stage_plan', 'reminder_rule', 'focus_session', 'preference'];
-const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
-const keyOf = (item: Pick<SyncEntity, 'entityType' | 'entityId'>) => `${item.entityType}|${item.entityId}`;
+import { activeDataset, readReplica, writeReplica, commitFirstMerge, getDeviceId, newId, localStore, accountDeleted, getMeta } from './local-db';
+const journal = require('../../../../packages/core/src/replica');
+const { validateEntity } = require('../../../../packages/core/src/projection');
+export type MergePreview = { token: string; localEntities: number; cloudEntities: number; local: Record<string,number>; cloud: Record<string,number> };
 
 export class SyncService {
-  constructor(private readonly store: LocalStore, private readonly adapter: SyncAdapter) {}
-  private running: Promise<{ uploaded: number; downloaded: number; conflicts: number }> | null = null;
-
-  private async localEntities(): Promise<SyncEntity[]> {
-    const result: SyncEntity[] = [];
-    for (const type of ENTITY_TYPES) result.push(...await this.store.listEntities(type));
-    return result;
+  private running: Promise<{uploaded:number;downloaded:number;conflicts:number}> | null=null;
+  private previewData: {token:string;dataset:string;account:string;fingerprint:string;cloud:SyncEntity[];local:SyncEntity[];at:number} | null=null;
+  constructor(_store: typeof localStore,private readonly adapter: SyncAdapter) {}
+  private async context() {
+    const dataset=activeDataset(), account=await this.adapter.identity();
+    if (!account) throw Error('请先登录');
+    const check=async () => { if (activeDataset()!==dataset || await this.adapter.identity()!==account) throw Error('同步账号已变化，请重试'); };
+    return {dataset,account,check};
   }
-
-  async preview(): Promise<{ localEntities: number; cloudEntities: number; local: Record<string, number>; cloud: Record<string, number> }> {
-    const [local, remote] = await Promise.all([this.localEntities(), this.adapter.pull(null)]);
-    const count = (items: SyncEntity[]) => items.reduce<Record<string, number>>((result, item) => { result[item.entityType] = (result[item.entityType] || 0) + (item.deletedAt ? 0 : 1); return result; }, {});
-    return { localEntities: local.filter((item) => !item.deletedAt).length, cloudEntities: remote.entities.filter((item) => !item.deletedAt).length, local: count(local), cloud: count(remote.entities) };
+  private async pullAll(cursor: SyncCursor,check:()=>Promise<void>) {
+    const entities: SyncEntity[]=[];
+    for (let i=0;i<1000;i++) {
+      await check(); const page=await this.adapter.pull(cursor); await check();
+      for (const e of page.entities) validateEntity(e);
+      entities.push(...page.entities);
+      if (page.hasMore && (!page.cursor || journal.equal(page.cursor,cursor))) throw Error('云端游标未前进');
+      cursor=page.cursor || cursor;
+      if (!page.hasMore) return {entities,cursor};
+    }
+    throw Error('同步数据过多，未改变本机数据，请联系维护者');
   }
-
-  /** Prepare a first-login merge without uploading until the caller confirms. */
-  async merge(strategy: 'merge' | 'local' | 'cloud'): Promise<void> {
-    const [local, remote] = await Promise.all([this.localEntities(), this.adapter.pull(null)]);
-    const localMap = new Map(local.map((item) => [keyOf(item), item]));
-    const remoteMap = new Map(remote.entities.map((item) => [keyOf(item), item]));
-    const pending = await this.store.listPendingMutations();
-    if (pending.length) await this.store.removeMutations(pending.map((item) => item.mutationId));
-    const now = new Date().toISOString();
-    if (strategy === 'cloud') {
-      for (const item of local) if (!remoteMap.has(keyOf(item))) await this.store.applyEntity({ ...clone(item), deletedAt: now });
-      for (const item of remote.entities) await this.store.applyEntity(item);
-      await this.store.setCursor(remote.cursor);
-      return;
-    }
-    // Cloud-only records are part of a normal merge. A local-only choice
-    // intentionally creates tombstones for them below.
-    if (strategy === 'merge') for (const item of remote.entities) if (!localMap.has(keyOf(item))) await this.store.applyEntity(item);
-    for (const item of local) {
-      if (item.deletedAt) continue;
-      const remoteItem = remoteMap.get(keyOf(item));
-      const same = remoteItem && JSON.stringify(remoteItem.payload) === JSON.stringify(item.payload);
-      if (same) continue;
-      await this.store.enqueueMutation({
-        mutationId: `${item.deviceId || 'android'}:merge:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`,
-        entityType: item.entityType, entityId: item.entityId, operation: 'upsert', patch: clone(item.payload),
-        basePayload: clone(remoteItem?.payload || {}), baseRevision: Number(remoteItem?.revision || 0),
-        deviceId: item.deviceId, createdAt: now
-      });
-    }
-    if (strategy === 'local') {
-      for (const item of remote.entities) if (!localMap.has(keyOf(item)) && !item.deletedAt) {
-        await this.store.enqueueMutation({
-          mutationId: `android:merge-delete:${Date.now()}:${Math.random().toString(36).slice(2, 9)}`,
-          entityType: item.entityType, entityId: item.entityId, operation: 'delete', patch: {},
-          basePayload: clone(item.payload), baseRevision: Number(item.revision || 0), deviceId: item.deviceId || 'android', createdAt: now
-        });
-      }
-    }
+  async preview(): Promise<MergePreview> {
+    const ctx=await this.context(),local=journal.materialize(readReplica(ctx.dataset)) as SyncEntity[];
+    const page=await this.pullAll(null,ctx.check), token=newId('preview');
+    const stats=journal.mergePreview(local,page.entities);
+    this.previewData={token,dataset:ctx.dataset,account:ctx.account,fingerprint:stats.fingerprint,cloud:page.entities,local,at:Date.now()};
+    return {token,localEntities:stats.localEntities,cloudEntities:stats.cloudEntities,local:stats.local,cloud:stats.cloud};
   }
-
-  async run(): Promise<{ uploaded: number; downloaded: number; conflicts: number }> {
+  async merge(token: string): Promise<void> {
+    const ctx=await this.context(),p=this.previewData;
+    if (!p || p.token!==token || p.dataset!==ctx.dataset || p.account!==ctx.account || Date.now()-p.at>600000) throw Error('同步预览已过期，请重新预览');
+    if (p.fingerprint!==journal.fingerprint(journal.materialize(readReplica(ctx.dataset)))) throw Error('预览后本机数据已修改，请重新预览');
+    const merged=journal.prepareMerge(p.local,p.cloud,()=>newId(getDeviceId()),getDeviceId());
+    commitFirstMerge(merged,ctx.dataset); this.previewData=null;
+  }
+  async run(): Promise<{uploaded:number;downloaded:number;conflicts:number}> {
     if (this.running) return this.running;
-    this.running = (async () => {
-      const pending = await this.store.listPendingMutations();
-      const pushed = pending.length ? await this.adapter.push(pending) : { accepted: [], conflicts: [] as SyncEntity[] };
-      const conflictIds = pushed.conflicts.map((item) => item.lastMutationId).filter((id): id is string => Boolean(id));
-      if (pushed.accepted.length || conflictIds.length) await this.store.removeMutations([...pushed.accepted, ...conflictIds]);
-      const cursor = await this.store.getCursor();
-      const pulled = await this.adapter.pull(cursor);
-      for (const entity of pulled.entities) await this.store.applyEntity(entity);
-      await this.store.setCursor(pulled.cursor);
-      return { uploaded: pushed.accepted.length, downloaded: pulled.entities.length, conflicts: pushed.conflicts.length };
-    })();
-    try { return await this.running; } finally { this.running = null; }
+    this.running=this.exchange();
+    try { return await this.running; } finally { this.running=null; }
+  }
+  private async exchange() {
+    const ctx=await this.context(),r=readReplica(ctx.dataset);
+    if (!r.migrated) throw Error('请先预览并确认首次同步');
+    if (getMeta('sync.paused',false)) throw Error('同步已暂停');
+    const outgoing=r.outbox.slice(); outgoing.forEach(m=>{m.attempted=true;}); writeReplica(r,ctx.dataset);
+    const results: any[]=[];
+    for (let i=0;i<outgoing.length;i+=100) {
+      await ctx.check(); const rows=await this.adapter.push(outgoing.slice(i,i+100).map(journal.transportMutation)); await ctx.check();
+      if (!Array.isArray(rows) || rows.some(row=>!['applied','duplicate','conflict'].includes(row.status))) throw Error('云端拒绝了操作，修改仍在本机保留');
+      results.push(...rows);
+    }
+    const page=await this.pullAll(r.cursor,ctx.check); await ctx.check();
+    // Read AGAIN after network awaits: edits made while syncing are included.
+    const current=readReplica(ctx.dataset);
+    journal.commitExchange(current,results,page.entities,page.cursor); current.lastSyncedAt=new Date().toISOString();
+    writeReplica(current,ctx.dataset);
+    return {uploaded:results.filter(row=>row.status!=='conflict').length,downloaded:page.entities.length,conflicts:current.conflicts.length};
   }
 }
-
 export function createSupabaseAdapter(): SyncAdapter | null {
-  if (!supabase) return null;
+  const client=supabase; if (!client) return null;
   return {
-    async push(mutations: SyncMutation[]) {
-      const { data, error } = await supabase.rpc('push_mutations', { p_mutations: mutations });
-      if (error) throw error;
-      const rows = Array.isArray(data) ? data : [];
-      return {
-        accepted: rows.filter((row: any) => row.status === 'applied' || row.status === 'duplicate').map((row: any) => row.mutationId),
-        conflicts: rows.filter((row: any) => row.status === 'conflict').map((row: any) => ({ entityId: String(row.entityId ?? ''), entityType: String(row.entityType ?? 'task'), updatedAt: new Date().toISOString(), deletedAt: null, revision: Number(row.revision ?? 0), deviceId: '', lastMutationId: String(row.mutationId ?? '') })) as SyncEntity[]
-      };
-    },
+    async identity() { const {data,error}=await client.auth.getSession(); if(error) throw error; return data.session?.user.id || ''; },
+    async push(mutations: SyncMutation[]) { const {data,error}=await client.rpc('push_mutations',{p_mutations:mutations}); if(error) throw error; return data; },
     async pull(cursor: SyncCursor) {
-      const { data, error } = await supabase.rpc('pull_changes', {
-        p_cursor: cursor?.updatedAt ?? null,
-        p_cursor_entity: cursor?.entityId ?? '',
-        p_limit: 500
-      });
-      if (error) throw error;
-      const next = data?.nextCursor;
-      return {
-        entities: (data?.items ?? []).map((item: any) => ({ payload: item.payload ?? {}, entityType: item.entityType, entityId: item.entityId, updatedAt: item.updatedAt, deletedAt: item.deletedAt ?? null, revision: Number(item.revision ?? 0), deviceId: item.deviceId, lastMutationId: item.lastMutationId ?? null })) as SyncEntity[],
-        cursor: next ? { updatedAt: next.updatedAt, entityId: next.entity } : cursor
-      };
+      const {data,error}=await client.rpc('pull_changes',{p_cursor:cursor?.updatedAt ?? null,p_cursor_entity:cursor?.entityId ?? '',p_limit:500});
+      if(error) throw error;
+      if (!Array.isArray(data?.items)) throw Error('同步响应无效');
+      return {entities:data.items,cursor:data.nextCursor ? {updatedAt:data.nextCursor.updatedAt,entityId:data.nextCursor.entity} : cursor,hasMore:data.hasMore===true};
     }
   };
 }
-
-export async function acquireFocusLease(deviceId: string, sessionId: string): Promise<boolean> {
-  if (!supabase) return true;
-  const { data, error } = await supabase.rpc('acquire_focus_lease', { p_device_id: deviceId, p_session_id: sessionId, p_lease_seconds: 90 });
-  if (error) throw error;
-  return data?.ok === true;
+export async function acquireFocusLease(deviceId:string,sessionId:string,seconds=90):Promise<boolean> {
+  if(!supabase) return true;
+  const {data:session}=await supabase.auth.getSession(); if(!session.session) return true;
+  const {data,error}=await supabase.rpc('acquire_focus_lease',{p_device_id:deviceId,p_session_id:sessionId,p_lease_seconds:seconds});
+  if(error) throw error; return data?.ok===true;
 }
-export async function releaseFocusLease(deviceId: string, sessionId?: string): Promise<void> {
-  if (!supabase) return;
-  const { error } = await supabase.rpc('release_focus_lease', { p_device_id: deviceId, p_session_id: sessionId ?? null });
-  if (error) throw error;
+export async function releaseFocusLease(deviceId:string,sessionId?:string):Promise<void> {
+  if(!supabase) return;
+  const {data:session}=await supabase.auth.getSession(); if(!session.session) return;
+  const {error}=await supabase.rpc('release_focus_lease',{p_device_id:deviceId,p_session_id:sessionId ?? null}); if(error) throw error;
 }
-export async function deleteCloudAccount(): Promise<void> {
-  if (!supabase) throw new Error('尚未配置同步服务。');
-  const { error } = await supabase.rpc('delete_account');
-  if (error) throw error;
-  await supabase.auth.signOut();
+export async function deleteCloudAccount():Promise<void> {
+  if(!supabase) throw Error('尚未配置同步服务');
+  const {error}=await supabase.rpc('delete_account'); if(error) throw error;
+  await supabase.auth.signOut({scope:'local'}); accountDeleted();
+}
+export async function listConflicts(): Promise<any[]> {
+  if(!supabase) return [];
+  const {data,error}=await supabase.from('sync_conflicts').select('*').eq('status','open').order('created_at').limit(100);
+  if(error) throw error; return data || [];
+}
+export async function resolveConflict(conflict:any,resolution:Record<string,unknown>):Promise<void> {
+  if(!supabase) throw Error('尚未配置同步服务');
+  const {data,error}=await supabase.rpc('resolve_conflict',{p_conflict_id:conflict.conflict_id,p_resolution:{...resolution,expectedRevision:conflict.remote_revision}});
+  if(error) throw error; if(!data?.resolved) throw Error('云端在选择期间又发生变化，请重新读取冲突');
+  const r=readReplica(); r.conflicts=r.conflicts.filter(c=>c.mutationId!==conflict.mutation_id); writeReplica(r);
 }

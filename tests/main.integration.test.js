@@ -75,7 +75,11 @@ function harness({ argv = [], packaged = true, login = {}, saved } = {}) {
           : name === './state-store.js' ? require('../src/state-store')
           : name === './security.js' ? require('../src/security')
           : name === './window-coordinator.js' ? require('../src/window-coordinator')
-          : name === './sync-service.js' ? require('../src/sync-service') : require(name),
+          : name === './sync-service.js' ? { ...require('../src/sync-service'), SyncService: class extends require('../src/sync-service').SyncService {
+            constructor(file, options) { super(file, { ...options, sqlite: false, env: {} }); }
+            load() { return { version: 1, deviceId: 'test-device', accounts: {}, config: {}, session: null, currentAccountId: null }; }
+            save() {}
+          } } : require(name),
     process: { argv, platform: 'win32', execPath: 'X:/猫狗日记/猫狗日记.exe', cwd: () => 'X:/source' },
     __dirname: 'X:/source', console, structuredClone, setTimeout() {}, clearTimeout() {}, setInterval() {}, clearInterval() {},
   });

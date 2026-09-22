@@ -20,14 +20,14 @@ test('Android client is local-first and does not ship demo task data or fake log
   assert.match(db, /CREATE TABLE IF NOT EXISTS entities/);
   assert.match(db, /CREATE TABLE IF NOT EXISTS mutations/);
   assert.match(db, /basePayload/);
-  assert.match(db, /row\.entity_id/);
+  assert.match(db, /entityId:row\.entity_id/);
   assert.doesNotMatch(app, /丹丹|demo-1|整理今天最重要/);
   assert.match(read('src/services/auth.ts'), /尚未配置同步服务/);
   assert.match(read('src/services/supabase.ts'), /expo-secure-store/);
 });
 
 test('focus persists absolute end time and does not sync device notification fields', () => {
-  const app = read('App.tsx');
+  const app = read('src/services/focus.ts');
   const db = read('src/services/local-db.ts');
   assert.match(app, /endsAt/);
   assert.match(app, /focus\.state/);
@@ -44,7 +44,8 @@ test('all six approved themes and Android reminder permissions are present', () 
   const tokens = read('src/theme/tokens.ts');
   for (const id of ['bg1', 'bg2', 'bg3', 'bg4', 'bg5', 'bg6']) assert.match(tokens, new RegExp(`\\b${id}\\b`));
   const config = read('app.json');
-  for (const permission of ['POST_NOTIFICATIONS', 'VIBRATE', 'SCHEDULE_EXACT_ALARM', 'USE_FULL_SCREEN_INTENT']) assert.match(config, new RegExp(permission));
+  for (const permission of ['POST_NOTIFICATIONS', 'VIBRATE', 'SCHEDULE_EXACT_ALARM']) assert.match(config, new RegExp(permission));
+  assert.doesNotMatch(config,/USE_FULL_SCREEN_INTENT/);
 });
 
 test('real Supabase keys are never committed in the Android source', () => {
@@ -56,9 +57,9 @@ test('real Supabase keys are never committed in the Android source', () => {
 test('first sync requires an explicit preview and uses the canonical completed field', () => {
   const app = read('App.tsx');
   const sync = read('src/services/sync.ts');
-  assert.match(app, /sync\.migrated/);
+  assert.match(app, /readReplica\(\)\.migrated/);
   assert.match(app, /首次同步预览/);
   assert.match(sync, /async preview\(\)/);
-  assert.match(sync, /async merge\(strategy/);
+  assert.match(sync, /async merge\(token/);
   assert.doesNotMatch(app, /done: false/);
 });
