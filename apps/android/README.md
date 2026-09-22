@@ -2,6 +2,8 @@
 
 采用 Expo SDK 54、React Native 0.81 和 TypeScript，配套 Windows 同步内测源码为 1.1.0-beta.3。Windows 1.0.0 稳定版不受影响。
 
+当前交付阶段为**离线内测**：不必创建 Supabase 项目、不需要账号。GitHub 原生构建明确留空云端配置；任务与提醒只在本机运行。下列同步模块已进入源码测试，但不代表公开云端服务已经部署或完成双设备实测。
+
 ## 当前能力
 
 - 今天、清单、每日坚持、专注、提醒、设置六个页面；任务详情、小步骤、搜索与阶段排期预览。
@@ -20,7 +22,7 @@ GitHub Actions → **Android native internal APK** → Run workflow。工作流�
 
 产物 `cat-dog-diary-android-internal` 使用 Expo 模板调试签名，仅供内测，不是正式发行签名。公开发行前维护者须创建、备份长期签名密钥；后续升级必须使用相同密钥。请先导出备份，不要让内测包成为重要数据的唯一副本。
 
-没有 Supabase 配置的构建仍可离线使用。测试同步须按 [后端说明](../../supabase/README.md) 部署全部迁移，在 Actions Secrets 中填写 `EXPO_PUBLIC_SUPABASE_URL` 和 `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`。
+本次不启用云同步。后续同步联调须按 [后端说明](../../supabase/README.md) 部署全部迁移，再明确切换构建配置，填入 `EXPO_PUBLIC_SUPABASE_URL` 和 `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`。
 
 两变量会进入 APK：它们是公开客户端配置，安全依赖 RLS 和账号认证。**绝不能填 service role 或 secret key**，构建检查会拒绝；真实值不提交 Git。
 

@@ -34,7 +34,7 @@ function loadServices(){
     const source=ts.transpileModule(fs.readFileSync(absolute,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
     mod._compile(source,absolute);return mod.exports;
   }
-  return {db:load('src/services/local-db.ts'),sync:load('src/services/sync.ts'),focus:load('src/services/focus.ts'),reminders:load('src/services/notifications.ts'),sqlite,scheduled,deliveries,setPermission:value=>{granted=value;},close:()=>sqlite.close()};
+  return {db:load('src/services/local-db.ts'),sync:load('src/services/sync.ts'),focus:load('src/services/focus.ts'),reminders:load('src/services/notifications.ts'),sqlite,scheduled,deliveries,notifications,setPermission:value=>{granted=value;},close:()=>sqlite.close()};
 }
 const e=(id,payload,revision=1)=>({entityType:'task',entityId:id,payload,revision,updatedAt:'2026-09-22T00:00:00.123456Z',deletedAt:null,deviceId:'win',lastMutationId:'cloud'});
 test('real SQLite writes preserve IDs, step edits, soft deletion and separate account caches',async()=>{
@@ -131,5 +131,50 @@ test('dismissed event and focus reminders stay dismissed across arbitrary rebuil
     db.setMeta(`focus.state.${db.activeDataset()}`,{sessionId:'one',mode:'focus',completed:true,endsAt:new Date(now).toISOString()});
     await reminders.rebuildReminders();await reminders.handleReminder('focus:one','ack');const count2=deliveries.length;
     for(let i=0;i<5;i++)await reminders.rebuildReminders();assert.equal(deliveries.length,count2);
+  }finally{close();}
+});
+
+test('a delayed rebuild cannot overwrite acknowledgement; repeated clicks keep the next occurrence intact',async t=>{
+  const {db,reminders,notifications,close}=loadServices();let now=Date.now();t.mock.method(Date,'now',()=>now);
+  try{
+    await db.saveTask({id:'race',title:'Experiment',completed:false,reminderMode:'interval',reminderMinutes:30});
+    await reminders.rebuildReminders();now+=31*60000;
+    const occurrence=structuredClone(reminders.reminderRows()[0]);
+    let release,entered;const gate=new Promise(r=>{release=r;}),ready=new Promise(r=>{entered=r;});
+    const original=notifications.getPermissionsAsync;
+    notifications.getPermissionsAsync=async()=>{entered();await gate;return original();};
+    const rebuilding=reminders.rebuildReminders();await ready;
+    const first=reminders.handleReminder('interval:race','ack',10,occurrence),second=reminders.handleReminder('interval:race','ack',10,occurrence);
+    release();await Promise.all([rebuilding,first,second]);
+    assert.equal(Date.parse(reminders.reminderRows()[0].at),now+30*60000);assert.equal(reminders.reminderRows()[0].pending,false);
+    now+=60000;await reminders.handleReminder('interval:race','ack',10,occurrence);
+    assert.equal(Date.parse(reminders.reminderRows()[0].at),now+29*60000,'stale UI cannot acknowledge the next cycle');
+  }finally{close();}
+});
+
+test('advance warning acknowledgement retains the due-time alert without accumulating reminders',async t=>{
+  const {db,reminders,deliveries,close}=loadServices();let now=Date.now();t.mock.method(Date,'now',()=>now);
+  try{
+    const dueAt=new Date(now+30*60000).toISOString();
+    await db.saveTask({id:'meeting',title:'Meeting',completed:false,dueAt,reminderMode:'event',reminderMinutes:10});
+    await reminders.rebuildReminders();now+=21*60000;await reminders.rebuildReminders();
+    await reminders.handleReminder('event:meeting','ack');assert.equal(reminders.reminderRows()[0].at,dueAt);
+    assert.equal(reminders.reminderRows().length,1);const count=deliveries.length;
+    now+=10*60000;await reminders.rebuildReminders();await reminders.handleReminder('event:meeting','ack');
+    for(let i=0;i<5;i++)await reminders.rebuildReminders();assert.equal(deliveries.length,count);
+  }finally{close();}
+});
+
+test('permission revocation clears stale IDs and switching accounts during scheduling does not leak alerts',async()=>{
+  const {db,reminders,notifications,scheduled,setPermission,close}=loadServices();
+  try{
+    await db.saveTask({id:'private',title:'Private',completed:false,reminderMode:'interval',reminderMinutes:30});
+    await reminders.rebuildReminders();setPermission(false);await reminders.rebuildReminders();
+    assert.equal(scheduled.size,0);assert.equal(reminders.reminderRows()[0].notificationId,null);
+    setPermission(true);await reminders.rebuildReminders();assert.equal(scheduled.size,1);
+    await reminders.clearDeviceNotifications();db.selectAccount('a');
+    const original=notifications.scheduleNotificationAsync;
+    notifications.scheduleNotificationAsync=async value=>{const id=await original(value);db.selectAccount('b');return id;};
+    await reminders.rebuildReminders();assert.equal(scheduled.size,0);assert.deepEqual(reminders.reminderRows(),[]);
   }finally{close();}
 });

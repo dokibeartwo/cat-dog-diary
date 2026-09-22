@@ -1,6 +1,7 @@
 // Uses the already configured Git credential helper. Never logs credentials.
-// node scripts/android-build-ci.cjs dispatch|status [runId]
+// node scripts/android-build-ci.cjs dispatch|status|logs|download [runId]
 const {execFileSync}=require('node:child_process');
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const repository='dokibeartwo/cat-dog-diary';
 async function main(){
   let credentials;
@@ -23,6 +24,20 @@ async function main(){
     const response=await fetch(`https://api.github.com/repos/${repository}/actions/jobs/${job.id}/logs`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(30000)});
     if(!response.ok)throw Error(`Logs unavailable: ${response.status}`);
     console.log((await response.text()).split('\n').slice(-130).join('\n'));
-  }else throw Error('Expected dispatch, status or logs');
+  }else if(process.argv[2]==='download'){
+    const id=process.argv[3];if(!/^\d+$/.test(id||''))throw Error('A numeric workflow run ID is required');
+    const artifacts=await api(`actions/runs/${id}/artifacts`);
+    const folder=path.resolve(__dirname,'../release',`android-ci-${id}`);fs.mkdirSync(folder,{recursive:true});
+    const names=process.argv[4]==='smoke'?['cat-dog-diary-android-smoke']:['cat-dog-diary-android-smoke','cat-dog-diary-android-internal'];
+    for(const artifact of artifacts.artifacts.filter(a=>names.includes(a.name)&&!a.expired).sort((a,b)=>names.indexOf(a.name)-names.indexOf(b.name))){
+      const file=path.join(folder,artifact.name+'.zip');
+      if(fs.existsSync(file)){console.log(JSON.stringify({artifact:artifact.name,file,existing:true}));continue;}
+      const response=await fetch(`https://api.github.com/repos/${repository}/actions/artifacts/${artifact.id}/zip`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(120000)});
+      if(!response.ok)throw Error(`Artifact download failed: ${response.status}`);
+      const bytes=Buffer.from(await response.arrayBuffer()),hash=crypto.createHash('sha256').update(bytes).digest('hex');
+      if(artifact.digest&&artifact.digest!==`sha256:${hash}`)throw Error('Artifact SHA-256 mismatch');
+      fs.writeFileSync(file,bytes,{flag:'wx'});console.log(JSON.stringify({artifact:artifact.name,file,bytes:bytes.length,sha256:hash}));
+    }
+  }else throw Error('Expected dispatch, status, logs or download');
 }
 main().catch(error=>{console.error(error.message);process.exitCode=1;});

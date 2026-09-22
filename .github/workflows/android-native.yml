@@ -9,8 +9,9 @@ jobs:
     timeout-minutes: 50
     env:
       EXPO_NO_TELEMETRY: '1'
-      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+      # This milestone is explicitly offline; never embed project credentials.
+      EXPO_PUBLIC_SUPABASE_URL: ''
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ''
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
