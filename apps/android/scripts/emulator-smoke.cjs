@@ -3,14 +3,15 @@ const {execFileSync}=require('node:child_process');
 const fs=require('node:fs');
 const path=require('node:path');
 const {findNode,keyboardShown,launcherDialog}=require('./ui-tree.cjs');
+const {startDynamicUi}=require('./dynamic-ui.cjs');
 const out=path.join(__dirname,'..','smoke-output');fs.mkdirSync(out,{recursive:true});
 const packageName='com.dokibeartwo.catdogdiary',warnings=[],checks=[];
 const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000});
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-let launcherDismissals=0;
+let launcherDismissals=0,dynamicUi;
 async function xml(){
   for(;;){
-    adb('shell','uiautomator','dump','/sdcard/catdog-ui.xml');const tree=adb('shell','cat','/sdcard/catdog-ui.xml');
+    const tree=await dynamicUi.source();
     const close=launcherDialog(tree);if(!close)return tree;
     // The fresh API 35 system launcher can ANR after APK installation, even
     // after our first frame. Close only that named system component; never
@@ -60,6 +61,7 @@ async function launch(){
 function screenshot(name){fs.writeFileSync(path.join(out,name+'.png'),execFileSync('adb',['exec-out','screencap','-p'],{timeout:30000}));}
 (async()=>{
   try{
+    dynamicUi=await startDynamicUi(out);
     adb('logcat','-c');await launch();screenshot('01-today');
     adb('shell','svc','wifi','disable');adb('shell','svc','data','disable');
     await tap('＋ 记下一件事');await check('task-editor-open','安排下一步');screenshot('02-task-editor');
@@ -77,5 +79,6 @@ function screenshot(name){fs.writeFileSync(path.join(out,name+'.png'),execFileSy
     if(/FATAL EXCEPTION[^]*?Process: com\.dokibeartwo\.catdogdiary|ReactNativeJS:.*(?:Error|TypeError|ReferenceError)/.test(log))throw Error('App native or JS runtime error; see device-log.txt');
     fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:true,api:35,checks,warnings},null,2));
     console.log('Installed APK smoke passed; screenshots captured. This is not physical-device notification validation.');
-  }catch(error){screenshot('failure');fs.writeFileSync(path.join(out,'failure-ui.xml'),await xml());fs.writeFileSync(path.join(out,'device-log.txt'),adb('logcat','-d'));fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:false,checks,warnings,error:error.message},null,2));throw error;}
+  }catch(error){screenshot('failure');fs.writeFileSync(path.join(out,'failure-ui.xml'),dynamicUi?await dynamicUi.source().catch(e=>`UI capture failed: ${e.message}`):'UI instrumentation unavailable');fs.writeFileSync(path.join(out,'device-log.txt'),adb('logcat','-d'));fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({passed:false,checks,warnings,error:error.message},null,2));throw error;}
+  finally{await dynamicUi?.close();}
 })().catch(error=>{console.error(error.message);process.exitCode=1;});

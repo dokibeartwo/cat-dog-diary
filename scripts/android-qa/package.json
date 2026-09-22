@@ -1,0 +1,9 @@
+{
+  "name": "cat-dog-android-qa-tools",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Disposable emulator tooling only; never bundled into the application",
+  "devDependencies": {
+    "appium-uiautomator2-server": "10.6.6"
+  }
+}

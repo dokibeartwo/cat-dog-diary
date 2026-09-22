@@ -8,6 +8,10 @@ test('typing targets the editable input, never the earlier visible label',()=>{
   assert.equal(findNode(text+input,'这件事叫什么',{editable:true}),input);
   assert.equal(findNode(text,'这件事叫什么',{editable:true}),undefined);
 });
+test('dynamic UiAutomator2 hierarchy keeps the same editable selector contract',()=>{
+  const native=input.replace('<node','<android.widget.EditText');
+  assert.equal(findNode(text+native,'这件事叫什么',{editable:true}),native);
+});
 test('disabled or zero-size UI controls are not tapped',()=>{
   assert.equal(findNode(input.replace('enabled="true"','enabled="false"'),'这件事叫什么'),undefined);
   assert.equal(findNode(input.replace('[10,50][90,100]','[0,0][0,0]'),'这件事叫什么'),undefined);

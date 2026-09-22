@@ -1,6 +1,6 @@
 // Keep UI automation selectors separate so a label cannot masquerade as an input.
 function findNode(tree, label, {editable = false} = {}) {
-  const matches = (tree.match(/<node\b[^>]*>/g) || []).filter(node => {
+  const matches = (tree.replaceAll('&apos;',"'").match(/<(?:node|[A-Za-z_][\w.$]*\.[\w.$]+)\b[^>]*>/g) || []).filter(node => {
     if (!node.includes('enabled="true"')) return false;
     if (editable && !node.includes('class="android.widget.EditText"')) return false;
     if (!node.includes(`text="${label}"`) && !node.includes(`content-desc="${label}"`)) return false;

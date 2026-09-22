@@ -79,6 +79,7 @@ jobs:
           path: apps/android/android/app/build/outputs/apk/release
       - name: Record APK checksum and verify smoke selectors
         run: |
+          npm ci --prefix scripts/android-qa --ignore-scripts --no-audit --no-fund
           mkdir -p apps/android/smoke-output
           sha256sum apps/android/android/app/build/outputs/apk/release/app-release.apk > apps/android/smoke-output/APK-SHA256.txt
           node --test apps/android/tests/ui-tree.test.mjs
