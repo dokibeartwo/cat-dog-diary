@@ -13,7 +13,9 @@ async function main(){
     if(!response.ok)throw Error(`GitHub API ${response.status}: ${response.statusText}`);
     return response.status===204?null:response.json();
   };
-  if(process.argv[2]==='dispatch'){await api('actions/workflows/android-native.yml/dispatches','POST',{ref:'main'});console.log('Android workflow dispatched.');}
+  if(process.argv[2]==='releases'){const releases=await api('releases?per_page=8');console.log(JSON.stringify(releases.map(r=>({tag:r.tag_name,prerelease:r.prerelease,url:r.html_url,assets:r.assets.map(a=>({name:a.name,bytes:a.size}))})),null,2));}
+  else if(process.argv[2]==='dispatch-smoke'){const id=process.argv[3];if(!/^\d+$/.test(id||''))throw Error('A source APK run ID is required');await api('actions/workflows/android-native.yml/dispatches','POST',{ref:'main',inputs:{apk_run_id:id}});console.log(`Retesting the existing APK from run ${id}; no rebuild.`);}
+  else if(process.argv[2]==='dispatch'){await api('actions/workflows/android-native.yml/dispatches','POST',{ref:'main'});console.log('Android workflow dispatched.');}
   else if(process.argv[2]==='status'){
     const id=process.argv[3];
     if(id){const run=await api(`actions/runs/${id}`),jobs=await api(`actions/runs/${id}/jobs`);console.log(JSON.stringify({id:run.id,status:run.status,conclusion:run.conclusion,url:run.html_url,jobs:jobs.jobs.map(j=>({name:j.name,status:j.status,conclusion:j.conclusion,steps:j.steps.map(s=>({name:s.name,status:s.status,conclusion:s.conclusion}))}))},null,2));}

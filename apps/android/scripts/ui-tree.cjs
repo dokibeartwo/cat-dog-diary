@@ -12,4 +12,8 @@ function findNode(tree, label, {editable = false} = {}) {
 function keyboardShown(dump) {
   return /\b(?:mInputShown|isInputViewShown|mIsInputViewShown)=true\b/.test(dump);
 }
-module.exports = {findNode, keyboardShown};
+function launcherDialog(tree) {
+  const title=findNode(tree,"Quickstep isn't responding"),close=findNode(tree,'Close app');
+  return title?.includes('package="android"') && close?.includes('package="android"') ? close : null;
+}
+module.exports = {findNode, keyboardShown, launcherDialog};

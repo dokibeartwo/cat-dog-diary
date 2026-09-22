@@ -18,7 +18,10 @@ module.exports=async api=>{
     for(let n=0;n<pixels.length;n+=4)if(pixels[n+3]>0)colors.add(`${pixels[n]>>4}:${pixels[n+1]>>4}:${pixels[n+2]>>4}`);
     assert.ok(colors.size>12,'widget must have rendered real content');
     fs.writeFileSync(path.join(output,'widget.png'),image.toPNG());
-    if(api.clean){const state=api.state();assert.equal(state.tasks.length,0);assert.ok(state.habits.every(h=>!h.active));assert.equal(state.quickShortcutAvailable,false);}
+    if(api.clean){const state=api.state();assert.equal(state.tasks.length,0);assert.ok(state.habits.every(h=>!h.active));assert.equal(state.quickShortcutAvailable,false);
+      const welcome=await js(`(()=>{const b=document.querySelector('#finishWelcome');if(!b)return null;const s=getComputedStyle(b);return {radius:parseFloat(s.borderRadius),height:b.getBoundingClientRect().height}})()`);
+      assert.ok(welcome&&welcome.radius>=12&&welcome.height>=44,'first-run action uses the same themed button sizing');
+    }
     if(api.main().isVisible())fs.writeFileSync(path.join(output,'main.png'),(await api.main().webContents.capturePage()).toPNG());
     record.passed=true;record.widgetBounds=bounds;record.colors=colors.size;
   }catch(error){record.error=error.stack;}

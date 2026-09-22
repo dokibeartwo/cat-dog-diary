@@ -71,6 +71,7 @@ if ($productVersion.Contains('-')) {
   @{ version = 1; directory = ("../" + (-join @([char]0x672C,[char]0x5730,[char]0x6570,[char]0x636E))) } |
     ConvertTo-Json | Set-Content -LiteralPath (Join-Path $candidateRoot 'data-location.json') -Encoding UTF8
   Copy-Item -LiteralPath (Join-Path $projectRoot 'RELEASE-1.1.0-BETA.3.md') -Destination (Join-Path $candidateRoot 'RELEASE-1.1.0-BETA.3.md')
+  Copy-Item -LiteralPath (Join-Path $projectRoot 'OFFLINE-BETA.md') -Destination (Join-Path $candidateRoot 'OFFLINE-BETA.md')
 }
 $guideName = (-join @([char]0x4F7F, [char]0x7528, [char]0x8BF4, [char]0x660E)) + ".md"
 foreach ($document in @("README.md", $guideName, "RELEASE-1.0.0.md", "PRIVACY.md", "ASSETS.md")) {

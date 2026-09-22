@@ -2,12 +2,25 @@
 const {execFileSync}=require('node:child_process');
 const fs=require('node:fs');
 const path=require('node:path');
-const {findNode,keyboardShown}=require('./ui-tree.cjs');
+const {findNode,keyboardShown,launcherDialog}=require('./ui-tree.cjs');
 const out=path.join(__dirname,'..','smoke-output');fs.mkdirSync(out,{recursive:true});
 const packageName='com.dokibeartwo.catdogdiary',warnings=[],checks=[];
 const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000});
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-async function xml(){adb('shell','uiautomator','dump','/sdcard/catdog-ui.xml');return adb('shell','cat','/sdcard/catdog-ui.xml');}
+let launcherDismissals=0;
+async function xml(){
+  for(;;){
+    adb('shell','uiautomator','dump','/sdcard/catdog-ui.xml');const tree=adb('shell','cat','/sdcard/catdog-ui.xml');
+    const close=launcherDialog(tree);if(!close)return tree;
+    // The fresh API 35 system launcher can ANR after APK installation, even
+    // after our first frame. Close only that named system component; never
+    // dismiss a CatDog app ANR, suppress system dialogs, or waive an assertion.
+    if(launcherDismissals>=2)throw Error('Disposable emulator launcher remains unhealthy');
+    screenshot(`system-launcher-anr-${++launcherDismissals}`);
+    warnings.push('Emulator Quickstep ANR: closed the system launcher, not the application');
+    await tapNode(close);await delay(1500);
+  }
+}
 async function tapNode(node){
   const bounds=node.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
   if(!bounds)throw Error('Control bounds missing');
@@ -36,15 +49,9 @@ async function type(label,value){
 async function check(label,content){if(!(await xml()).includes(content))throw Error(label);checks.push(label);}
 async function launch(){
   adb('shell','am','start','-W','-n',`${packageName}/.MainActivity`);
-  const end=Date.now()+45000;let handledLauncher=false;
+  const end=Date.now()+45000;
   while(Date.now()<end){
     const tree=await xml();
-    // API 35's freshly booted launcher may ANR while scanning installed apps.
-    // Dismiss ONLY this identified system-launcher dialog, never an app ANR.
-    if(tree.includes("Quickstep isn't responding")&&!handledLauncher){
-      screenshot('system-launcher-anr');warnings.push('Fresh emulator Quickstep ANR; chose Wait once');
-      const wait=findNode(tree,'Wait');if(wait)await tapNode(wait);handledLauncher=true;continue;
-    }
     if(tree.includes(`package="${packageName}"`)&&tree.includes('猫狗日记')){checks.push('app-cold-start');return;}
     await delay(1000);
   }
