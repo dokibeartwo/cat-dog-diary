@@ -23,9 +23,16 @@ async function main(){
   }else if(process.argv[2]==='logs'){
     const jobs=await api(`actions/runs/${process.argv[3]}/jobs`),job=jobs.jobs.find(j=>j.conclusion==='failure')||jobs.jobs[0];
     if(!job)throw Error('No job yet');
-    const response=await fetch(`https://api.github.com/repos/${repository}/actions/jobs/${job.id}/logs`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(30000)});
-    if(!response.ok)throw Error(`Logs unavailable: ${response.status}`);
-    console.log((await response.text()).split('\n').slice(-130).join('\n'));
+    const response=await fetch(`https://api.github.com/repos/${repository}/actions/jobs/${job.id}/logs`,{headers:{Authorization:`Bearer ${token}`},redirect:'manual',signal:AbortSignal.timeout(30000)});
+    if(response.status!==302)throw Error(`Logs unavailable: ${response.status}`);
+    const location=new URL(response.headers.get('location'));
+    if(location.protocol!=='https:'||!location.hostname.endsWith('.blob.core.windows.net'))throw Error('Unexpected log storage');
+    const head=await fetch(location,{method:'HEAD',signal:AbortSignal.timeout(30000)});
+    const bytes=Number(head.headers.get('content-length'));
+    if(!head.ok||!Number.isSafeInteger(bytes)||bytes<1)throw Error('Log size unavailable');
+    const tail=await fetch(location,{headers:{Range:`bytes=${Math.max(0,bytes-65536)}-${bytes-1}`},signal:AbortSignal.timeout(30000)});
+    if(tail.status!==206)throw Error(`Log range unavailable: ${tail.status}`);
+    console.log((await tail.text()).split('\n').slice(-130).join('\n'));
   }else if(process.argv[2]==='inspect'){
     // Fetch only the requested diagnostic entries from a large screenshot ZIP.
     // Full artifact download still independently verifies its SHA-256 for release.

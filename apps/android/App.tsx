@@ -17,6 +17,7 @@ import {configureNotifications,rebuildReminders,reminderRows,handleReminder,clea
 import {readFocus,startFocus,toggleFocus,finishFocus,remaining,renewFocusLease,type FocusMode} from './src/services/focus';
 const rules=require('../../packages/core/src/mobile-rules');
 const diary=require('../../src/shared/diary-v1');
+const {occurrenceId,nextForegroundReminder}=require('./src/services/reminder-presentation');
 type Tab='today'|'tasks'|'habits'|'focus'|'reminders'|'settings';
 const backgrounds:Record<ThemeId,ImageSourcePropType>={bg1:require('./assets/themes/bg1-main.jpg'),bg2:require('./assets/themes/bg2-main.jpg'),bg3:require('./assets/themes/bg3-main.jpg'),bg4:require('./assets/themes/bg4-main.jpg'),bg5:require('./assets/themes/bg5-main.jpg'),bg6:require('./assets/themes/bg6-main.jpg')};
 const labels:Record<FocusMode,string>={focus:'自由专注',shortBreak:'短休',longBreak:'长休'};
@@ -60,18 +61,35 @@ export default function App(){
     const lease=setInterval(()=>{void renewFocusLease().then(setFocus).catch(e=>{setFocus(readFocus());setSyncText(`专注租约需要联网确认：${errorText(e)}`);});},30000);
     const appState=AppState.addEventListener('change',value=>{if(value==='active'){supabase?.auth.startAutoRefresh();void reload().then(()=>runSync()).catch(e=>setError(errorText(e)));}else supabase?.auth.stopAutoRefresh();});
     const received=Notifications.addNotificationReceivedListener(()=>{void rebuildReminders().then(setReminders).catch(e=>setError(errorText(e)));});
-    const showResponse=(r:any)=>{if(r?.notification.request.content.data.dataset===activeDataset()){fullScreenKey.current='';setTab('reminders');void rebuildReminders().then(setReminders).catch(e=>setError(errorText(e)));}};
+    const showResponse=(r:any)=>{if(r?.notification.request.content.data.dataset===activeDataset()){setTab('reminders');void rebuildReminders().then(setReminders).catch(e=>setError(errorText(e)));}};
     const response=Notifications.addNotificationResponseReceivedListener(showResponse);void Notifications.getLastNotificationResponseAsync().then(showResponse);
     const realtime=supabase?.channel('diary-changes').on('postgres_changes',{event:'*',schema:'public',table:'sync_entities'},()=>void runSync()).subscribe();
     const network=Network.addNetworkStateListener(value=>{if(value.isConnected)void runSync();});
     return()=>{clearInterval(ticker);clearInterval(polling);clearInterval(lease);appState.remove();received.remove();response.remove();network.remove();if(realtime)void supabase?.removeChannel(realtime);};
   },[reload,runSync]);
-  useEffect(()=>{if(AppState.currentState!=='active'||alert||taskDraft||habitDraft||confirm||detailId||error||preview||conflicts.length)return;const pending=reminders.find(r=>!r.handledAt&&!r.deferred&&Date.parse(r.at)<=clock);if(pending&&pending.key!==fullScreenKey.current){fullScreenKey.current=pending.key;setAlert(pending);}},[clock,reminders,alert,taskDraft,habitDraft,confirm,detailId,error,preview,conflicts]);
+  useEffect(()=>{if(AppState.currentState!=='active'||alert||taskDraft||habitDraft||confirm||detailId||error||preview||conflicts.length)return;const pending=nextForegroundReminder(reminders,clock,fullScreenKey.current);if(pending){fullScreenKey.current=occurrenceId(pending);setAlert(pending);}},[clock,reminders,alert,taskDraft,habitDraft,confirm,detailId,error,preview,conflicts]);
   const chooseTheme=async(id:ThemeId)=>{await saveEntity('preference',{themeId:id});setTheme(id);setMeta('theme.id',id);await changed();};
   const saveTask=async(value:any,newSteps:string[])=>{const id=value.id||newId('task');await saveEntity('task',{...value,id,completed:value.completed===true,createdAt:value.createdAt||new Date().toISOString()});for(const [index,title]of newSteps.entries())await saveEntity('step',{id:newId('step'),taskId:id,title,completed:false,position:steps.filter(s=>s.taskId===id).length+index});setTaskDraft(null);await changed();};
   const completeTask=async(task:TaskRecord)=>{const completed=!task.completed;await saveEntity('task',{...task,completed,completedAt:completed?new Date().toISOString():null});if(completed){const state={tasks:[{...task,completed,steps:steps.filter(s=>s.taskId===task.id)}]};const child=diary.spawnNext(state,state.tasks[0],()=>newId('step'));if(child){await saveEntity('task',state.tasks[0]!);await saveEntity('task',child);for(const step of child.steps||[])await saveEntity('step',{...step,taskId:child.id});}}await changed();};
   const beginFocus=async(mode:FocusMode,minutes:number,task?:TaskRecord)=>{const f=await startFocus(mode,minutes,task);setFocus(f);setTab('focus');setDetailId(null);await reload();};
-  const handleAlert=async(action:'ack'|'snooze',complete=false)=>{if(!alert)return;const current=reminderRows().find(r=>r.key===alert.key&&r.rule===alert.rule&&r.at===alert.at&&!r.handledAt);if(current){if(complete){if(alert.type==='habit'){await saveEntity('habit_event',{id:`event-${alert.sourceId}-${Date.parse(alert.at)}`,habitId:alert.sourceId,occurredAt:new Date().toISOString(),completed:true,source:'android'});}else{const task=(await listTasks()).find(t=>t.id===alert.sourceId);if(task&&!task.completed)await completeTask(task);}}await handleReminder(alert.key,action,10,alert);}setAlert(null);fullScreenKey.current='';await changed();};
+  const handleAlert=async(action:'ack'|'snooze',complete=false)=>{
+    if(!alert)return;
+    // Includes alerts opened manually from the reminder centre. Do not clear
+    // this identity on dismissal: an intermediate render may still hold the
+    // old pending list. The next scheduled occurrence has a different `at`.
+    fullScreenKey.current=occurrenceId(alert);
+    const current=reminderRows().find(r=>r.key===alert.key&&r.rule===alert.rule&&r.at===alert.at&&!r.handledAt);
+    if(current){
+      if(complete){
+        if(alert.type==='habit')await saveEntity('habit_event',{id:`event-${alert.sourceId}-${Date.parse(alert.at)}`,habitId:alert.sourceId,occurredAt:new Date().toISOString(),completed:true,source:'android'});
+        else{const task=(await listTasks()).find(t=>t.id===alert.sourceId);if(task&&!task.completed)await completeTask(task);}
+      }
+      await handleReminder(alert.key,action,10,alert);
+    }
+    // Publish the refreshed reminder state before removing the overlay.
+    await changed();
+    setAlert(null);
+  };
   const detail=tasks.find(t=>t.id===detailId),left=focus.sessionId?remaining(focus,clock):duration*60;
   const visible=(tab==='today'?rules.todayTasks(tasks,clock):tasks).filter((t:TaskRecord)=>filter==='stage'?t.inStage!==false:filter==='backlog'?t.scheduleMode==='backlog':filter==='done'?t.completed:filter==='open'?!t.completed:true).filter((t:TaskRecord)=>`${t.title} ${t.notes||''} ${t.category||''}`.toLowerCase().includes(query.toLowerCase()));
   const ask=(title:string,message:string,action:()=>Promise<void>)=>setConfirm({title,message,action});
