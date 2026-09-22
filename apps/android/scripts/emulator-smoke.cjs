@@ -43,6 +43,7 @@ async function type(label,value){
   adb('shell','input','text',value.replaceAll(' ','%s'));await delay(300);
   const entered=findNode(await xml(),label,{editable:true});
   if(!entered?.includes(`text="${value}"`))throw Error(`Input value did not persist: ${label}`);
+  if(label==='间隔（分钟）'){checks.push('numeric-input-visible-above-keyboard');screenshot('08-numeric-keyboard');}
   // Back without an actual soft keyboard closes the editor (or even the app).
   if(keyboardShown(adb('shell','dumpsys','input_method')))adb('shell','input','keyevent','4');
   await delay(300);

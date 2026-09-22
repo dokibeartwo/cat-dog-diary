@@ -16,7 +16,7 @@
     },
     "android": {
       "package": "com.dokibeartwo.catdogdiary",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "POST_NOTIFICATIONS",
         "VIBRATE",

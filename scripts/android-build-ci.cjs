@@ -26,6 +26,41 @@ async function main(){
     const response=await fetch(`https://api.github.com/repos/${repository}/actions/jobs/${job.id}/logs`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(30000)});
     if(!response.ok)throw Error(`Logs unavailable: ${response.status}`);
     console.log((await response.text()).split('\n').slice(-130).join('\n'));
+  }else if(process.argv[2]==='inspect'){
+    // Fetch only the requested diagnostic entries from a large screenshot ZIP.
+    // Full artifact download still independently verifies its SHA-256 for release.
+    const id=process.argv[3];if(!/^\d+$/.test(id||''))throw Error('Numeric run ID required');
+    const artifacts=await api(`actions/runs/${id}/artifacts`);
+    const artifact=artifacts.artifacts.find(a=>a.name==='cat-dog-diary-android-smoke'&&!a.expired);
+    if(!artifact)throw Error('Diagnostic artifact unavailable');
+    const redirect=await fetch(`https://api.github.com/repos/${repository}/actions/artifacts/${artifact.id}/zip`,{headers:{Authorization:`Bearer ${token}`},redirect:'manual',signal:AbortSignal.timeout(30000)});
+    const location=new URL(redirect.headers.get('location'));
+    if(location.protocol!=='https:'||!location.hostname.endsWith('.blob.core.windows.net'))throw Error('Unexpected artifact storage');
+    const range=async(spec)=>{const response=await fetch(location,{headers:{Range:`bytes=${spec}`},signal:AbortSignal.timeout(60000)});if(response.status!==206)throw Error(`Range download failed: ${response.status}`);return Buffer.from(await response.arrayBuffer());};
+    const tail=await range(`${Math.max(0,artifact.size_in_bytes-65557)}-${artifact.size_in_bytes-1}`);let end=-1;
+    for(let i=tail.length-22;i>=0;i--)if(tail.readUInt32LE(i)===0x06054b50){end=i;break;}
+    if(end<0)throw Error('ZIP directory missing');
+    const size=tail.readUInt32LE(end+12),offset=tail.readUInt32LE(end+16);
+    if(size>1024*1024||offset===0xffffffff)throw Error('Unsupported diagnostic ZIP');
+    const directory=await range(`${offset}-${offset+size-1}`),entries=[];
+    for(let i=0;i+46<=directory.length;){
+      if(directory.readUInt32LE(i)!==0x02014b50)throw Error('Invalid ZIP directory');
+      const n=directory.readUInt16LE(i+28),extra=directory.readUInt16LE(i+30),comment=directory.readUInt16LE(i+32);
+      entries.push({name:directory.subarray(i+46,i+46+n).toString('utf8'),method:directory.readUInt16LE(i+10),size:directory.readUInt32LE(i+20),offset:directory.readUInt32LE(i+42)});i+=46+n+extra+comment;
+    }
+    const folder=path.resolve(__dirname,'../release',`android-ci-${id}`,'triage');fs.mkdirSync(folder,{recursive:true});
+    const wanted=['result.json','failure-ui.xml','failure.png','input-method.txt'];
+    for(const entry of entries.filter(e=>wanted.includes(e.name))){
+      if(entry.size>4*1024*1024)throw Error('Diagnostic entry exceeds limit');
+      const header=await range(`${entry.offset}-${entry.offset+29}`);
+      if(header.readUInt32LE(0)!==0x04034b50)throw Error('Invalid ZIP local header');
+      const start=entry.offset+30+header.readUInt16LE(26)+header.readUInt16LE(28);
+      const compressed=await range(`${start}-${start+entry.size-1}`);
+      const content=entry.method===8?require('node:zlib').inflateRawSync(compressed,{maxOutputLength:8*1024*1024}):entry.method===0?compressed:null;
+      if(!content)throw Error('Unsupported ZIP compression');
+      fs.writeFileSync(path.join(folder,entry.name),content);
+      console.log(entry.name==='result.json'?content.toString('utf8'):JSON.stringify({diagnostic:entry.name,file:path.join(folder,entry.name),bytes:content.length}));
+    }
   }else if(process.argv[2]==='download'){
     const id=process.argv[3];if(!/^\d+$/.test(id||''))throw Error('A numeric workflow run ID is required');
     const artifacts=await api(`actions/runs/${id}/artifacts`);
