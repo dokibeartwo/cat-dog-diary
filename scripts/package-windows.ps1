@@ -66,6 +66,12 @@ Copy-Item -LiteralPath (Join-Path $projectRoot "src") -Destination (Join-Path $a
 New-Item -ItemType Directory -Path (Join-Path $appRoot "packages") -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $projectRoot "packages\core") -Destination (Join-Path $appRoot "packages\core") -Recurse
 Copy-Item -LiteralPath (Join-Path $projectRoot "package.json") -Destination (Join-Path $appRoot "package.json")
+if ($productVersion.Contains('-')) {
+  # Keep prerelease data outside the versioned app folder and out of the ZIP.
+  @{ version = 1; directory = ("../" + (-join @([char]0x672C,[char]0x5730,[char]0x6570,[char]0x636E))) } |
+    ConvertTo-Json | Set-Content -LiteralPath (Join-Path $candidateRoot 'data-location.json') -Encoding UTF8
+  Copy-Item -LiteralPath (Join-Path $projectRoot 'RELEASE-1.1.0-BETA.3.md') -Destination (Join-Path $candidateRoot 'RELEASE-1.1.0-BETA.3.md')
+}
 $guideName = (-join @([char]0x4F7F, [char]0x7528, [char]0x8BF4, [char]0x660E)) + ".md"
 foreach ($document in @("README.md", $guideName, "RELEASE-1.0.0.md", "PRIVACY.md", "ASSETS.md")) {
   $source = Join-Path $projectRoot $document

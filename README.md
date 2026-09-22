@@ -68,9 +68,11 @@ Windows 版在未配置同步时不联网，不需要注册账号，也不会上
 
 ## Android 与跨设备同步内测
 
+目前先交付**离线内测**，无需创建 Supabase 项目或登录。手机任务和提醒保存在本机；暂不进行电脑与手机自动同步。Windows 内测包与稳定版数据隔离，双击后在程序文件夹旁创建“本地数据”（放在 E 盘就保存在 E 盘）；更新时保留该目录，里面的数据及备份不上传 GitHub。稳定版原数据目录和快捷方式不变。
+
 `apps/android` 是独立的 Expo/React Native 客户端，提供今天、任务、每日坚持、专注、六套主题和邮箱验证码登录。Windows 与 Android 的同步数据层使用 Supabase，采用本地优先策略：断网继续使用，联网后上传待处理变更并拉取云端变更；设备级提醒、离席状态、桌面小组件和正在运行的专注界面不会上传。
 
-内测需要自行创建 Supabase 项目并按时间顺序执行 [`supabase/migrations`](supabase/migrations) 中全部 SQL 迁移，再把项目 URL 和 publishable key 写入本地配置（参考 [`.env.example`](.env.example)，不要提交真实密钥）。邮箱验证码、任务数据、习惯和专注历史会存入该项目；设置中可导出本机数据、退出账号或删除云端账号。服务端依赖 RLS，客户端不使用 service role key。
+后续开启云同步才需要创建 Supabase 项目并按时间顺序执行 [`supabase/migrations`](supabase/migrations) 中全部 SQL 迁移，再把项目 URL 和 publishable key 写入本地配置（参考 [`.env.example`](.env.example)，不要提交真实密钥）。邮箱验证码、任务数据、习惯和专注历史会存入该项目；设置中可导出本机数据、退出账号或删除云端账号。服务端依赖 RLS，客户端不使用 service role key。
 
 首次登录不会自动上传或覆盖数据。验证邮箱后，设置页会显示本机与云端记录数量，选择“备份并合并”后才执行同步（不提供破坏性的整库覆盖）；预览本身不会推进同步游标，也不会修改任一侧数据。若中途退出，重新打开设置即可继续预览。
 

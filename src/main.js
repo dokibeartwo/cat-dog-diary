@@ -42,6 +42,7 @@ let dayChecked=null;
 let schedulePreview=null;
 let restorePreview=null;
 let reminderReadyTimer;
+let displayedReminderKey=null;
 const themeConceptMode = process.argv.includes("--capture-theme-456");
 const captureMode = process.argv.includes("--capture") || themeConceptMode;
 const stabilityQaMode=process.argv.includes('--qa-windows');
@@ -58,6 +59,8 @@ app.on('web-contents-created',(_event,contents)=>secureContents(contents));
 // transparent frameless windows on Windows. This app is UI-light, so software
 // compositing is the stable choice for a consistently transparent widget.
 app.disableHardwareAcceleration();
+const customDataPath=require('./data-location.js').customDataDirectory({argv:process.argv,executable:process.execPath,packaged:app.isPackaged,isolated:isolatedMode},fs);
+if(customDataPath){fs.mkdirSync(customDataPath,{recursive:true});app.setPath('userData',customDataPath);}
 // Capture-only windows use isolated data and must be able to render while the
 // installed app is running. Normal launches still keep the single-instance rule.
 const hasSingleInstanceLock = isolatedMode || app.requestSingleInstanceLock();
@@ -299,6 +302,7 @@ function dataPath() {
 }
 
 function legacyDataPath() {
+  if(customDataPath)return dataPath();
   return path.join(app.getPath("appData"), "Done", "done-data.json");
 }
 
@@ -594,6 +598,11 @@ function revealActiveReminder() {
 function revealReadyReminder(event,key) {
   if(!activeReminder||activeReminder.key!==key||reminderWindow?.webContents!==event.sender||quitting)return false;
   clearTimeout(reminderReadyTimer);
+  // Both initial-state hydration and the live broadcast can acknowledge the
+  // same frame. Re-showing/resizing that already visible window closes a
+  // user's open selector and lets the following Escape dismiss the reminder.
+  if(displayedReminderKey===key&&reminderWindow.isVisible())return true;
+  displayedReminderKey=key;
   if(activeReminder.presentation==='light') {
     const area=screen.getPrimaryDisplay().workArea;
     reminderWindow.setBounds({x:area.x+area.width-464,y:area.y+area.height-338,width:440,height:314});
@@ -1926,7 +1935,7 @@ function registerIpc() {
     if(draft.tasks.some(task=>task.id===id))throw Error('同一任务已存在');
     draft.tasks.push(prepareTaskReminder(normalizeTask(entry.task),true));draft.trash=draft.trash.filter(item=>item!==entry);
   }));
-  ipcMain.handle('data:status',()=>({backups:store?.list() || [],readOnly:Boolean(store?.readOnly),message:store?.issue || '',path:dataPath()}));
+  ipcMain.handle('data:status',()=>({backups:store?.list() || [],readOnly:Boolean(store?.readOnly),message:store?.issue || '',path:dataPath(),customDirectory:Boolean(customDataPath)}));
   ipcMain.handle('data:backup',()=>{if(store?.readOnly)throw Error(store.issue);saveState();return store.backup();});
   ipcMain.handle('data:export',async()=>{
     if(store?.readOnly)throw Error('当前数据读取失败，不能把空视图当作备份导出；请先恢复已有备份');

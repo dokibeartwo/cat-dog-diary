@@ -28,7 +28,7 @@ function harness({ argv = [], packaged = true, login = {}, saved } = {}) {
     once(event, fn) { this.onceEvents[event] = fn; }
     on(event,fn) {this.events[event]=fn;}
     loadFile(file) {this.webContents.mainFrame={url:require('node:url').pathToFileURL(file).href};}
-    show() { this.visible = true;this.events.show?.(); }
+    show() { this.visible = true;this.showCount=(this.showCount||0)+1;this.events.show?.(); }
     showInactive() { this.show(); }
     hide() { const was=this.visible;this.visible = false;if(was)this.events.hide?.(); }
     focus() {}
@@ -75,6 +75,7 @@ function harness({ argv = [], packaged = true, login = {}, saved } = {}) {
           : name === './state-store.js' ? require('../src/state-store')
           : name === './security.js' ? require('../src/security')
           : name === './window-coordinator.js' ? require('../src/window-coordinator')
+          : name === './data-location.js' ? require('../src/data-location')
           : name === './sync-service.js' ? { ...require('../src/sync-service'), SyncService: class extends require('../src/sync-service').SyncService {
             constructor(file, options) { super(file, { ...options, sqlite: false, env: {} }); }
             load() { return { version: 1, deviceId: 'test-device', accounts: {}, config: {}, session: null, currentAccountId: null }; }
@@ -88,6 +89,7 @@ function harness({ argv = [], packaged = true, login = {}, saved } = {}) {
     sender:()=>mainWindow.webContents,
     get: () => publicState(), active: () => activeReminder,
     enqueue: enqueueBigReminder, next: showNextBigReminder,
+    reminder:()=>reminderWindow,readyReminder:key=>revealReadyReminder({sender:reminderWindow.webContents},key),
     presence: setPresenceStatus, clearPresence: clearPresenceStatus,
     tick: precisionTick, load: loadState, startup: startupSettings
   };`, context);
@@ -101,6 +103,15 @@ function interval(h) {
   h.api.next();
   return task;
 }
+
+test('duplicate reminder frame acknowledgement does not refocus or resize an open selector',()=>{
+  const h=harness();interval(h);const key=h.api.active().key;
+  assert.equal(h.api.readyReminder(key),true);const shows=h.api.reminder().showCount;
+  assert.equal(h.api.readyReminder(key),true);assert.equal(h.api.reminder().showCount,shows);
+  assert.equal(h.api.readyReminder('old-key'),false);
+  h.api.reminder().hide();assert.equal(h.api.readyReminder(key),true);
+  assert.equal(h.api.reminder().showCount,shows+1,'an actually hidden current reminder can still reopen');
+});
 
 test('v1 date-only task and recurrence survive reload; completion generates exactly one next occurrence',()=>{
   const h=harness();

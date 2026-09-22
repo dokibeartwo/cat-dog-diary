@@ -32,11 +32,14 @@ async function main(){
     for(const artifact of artifacts.artifacts.filter(a=>names.includes(a.name)&&!a.expired).sort((a,b)=>names.indexOf(a.name)-names.indexOf(b.name))){
       const file=path.join(folder,artifact.name+'.zip');
       if(fs.existsSync(file)){console.log(JSON.stringify({artifact:artifact.name,file,existing:true}));continue;}
-      const response=await fetch(`https://api.github.com/repos/${repository}/actions/artifacts/${artifact.id}/zip`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(120000)});
+      console.log(JSON.stringify({artifact:artifact.name,downloading:true,expectedBytes:artifact.size_in_bytes}));
+      const response=await fetch(`https://api.github.com/repos/${repository}/actions/artifacts/${artifact.id}/zip`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(600000)});
       if(!response.ok)throw Error(`Artifact download failed: ${response.status}`);
-      const bytes=Buffer.from(await response.arrayBuffer()),hash=crypto.createHash('sha256').update(bytes).digest('hex');
+      const partial=file+`.${Date.now()}.partial`,fd=fs.openSync(partial,'wx'),digest=crypto.createHash('sha256');let bytes=0,lastReport=Date.now();
+      try{for await(const chunk of response.body){bytes+=chunk.length;if(bytes>512*1024*1024)throw Error('Artifact exceeds download limit');digest.update(chunk);fs.writeFileSync(fd,chunk);if(Date.now()-lastReport>15000){console.log(JSON.stringify({artifact:artifact.name,downloadedBytes:bytes}));lastReport=Date.now();}}fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+      const hash=digest.digest('hex');
       if(artifact.digest&&artifact.digest!==`sha256:${hash}`)throw Error('Artifact SHA-256 mismatch');
-      fs.writeFileSync(file,bytes,{flag:'wx'});console.log(JSON.stringify({artifact:artifact.name,file,bytes:bytes.length,sha256:hash}));
+      fs.renameSync(partial,file);console.log(JSON.stringify({artifact:artifact.name,file,bytes,sha256:hash}));
     }
   }else throw Error('Expected dispatch, status, logs or download');
 }

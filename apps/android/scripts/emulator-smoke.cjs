@@ -2,25 +2,37 @@
 const {execFileSync}=require('node:child_process');
 const fs=require('node:fs');
 const path=require('node:path');
+const {findNode,keyboardShown}=require('./ui-tree.cjs');
 const out=path.join(__dirname,'..','smoke-output');fs.mkdirSync(out,{recursive:true});
 const packageName='com.dokibeartwo.catdogdiary',warnings=[],checks=[];
 const adb=(...args)=>execFileSync('adb',args,{encoding:'utf8',timeout:30000});
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function xml(){adb('shell','uiautomator','dump','/sdcard/catdog-ui.xml');return adb('shell','cat','/sdcard/catdog-ui.xml');}
-function findNode(tree,label){return (tree.match(/<node\b[^>]*>/g)||[]).find(n=>(n.includes(`text="${label}"`)||n.includes(`content-desc="${label}"`))&&n.includes('enabled="true"'));}
 async function tapNode(node){
   const bounds=node.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
   if(!bounds)throw Error('Control bounds missing');
   adb('shell','input','tap',String(Math.floor((+bounds[1]+ +bounds[3])/2)),String(Math.floor((+bounds[2]+ +bounds[4])/2)));await delay(700);
 }
-async function tap(label,scroll=false){
+async function tap(label,scroll=false,options={}){
   for(let attempt=0;attempt<(scroll?10:1);attempt++){
-    const node=findNode(await xml(),label);if(node){await tapNode(node);return;}
+    const tree=await xml();
+    if(!tree.includes(`package="${packageName}"`))throw Error(`App is not foreground while looking for: ${label}`);
+    const node=findNode(tree,label,options);if(node){await tapNode(node);return;}
     if(scroll){adb('shell','input','swipe','540','1700','540','650','350');await delay(300);}
   }
   throw Error(`UI control missing: ${label}`);
 }
-async function type(label,value){await tap(label,true);adb('shell','input','text',value.replaceAll(' ','%s'));adb('shell','input','keyevent','4');await delay(300);}
+async function type(label,value){
+  await tap(label,true,{editable:true});
+  const focused=findNode(await xml(),label,{editable:true});
+  if(!focused?.includes('focused="true"'))throw Error(`Input did not receive focus: ${label}`);
+  adb('shell','input','text',value.replaceAll(' ','%s'));await delay(300);
+  const entered=findNode(await xml(),label,{editable:true});
+  if(!entered?.includes(`text="${value}"`))throw Error(`Input value did not persist: ${label}`);
+  // Back without an actual soft keyboard closes the editor (or even the app).
+  if(keyboardShown(adb('shell','dumpsys','input_method')))adb('shell','input','keyevent','4');
+  await delay(300);
+}
 async function check(label,content){if(!(await xml()).includes(content))throw Error(label);checks.push(label);}
 async function launch(){
   adb('shell','am','start','-W','-n',`${packageName}/.MainActivity`);

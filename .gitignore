@@ -25,3 +25,11 @@ apps/android/dist-android/
 *.keystore
 *.jks
 apps/android/smoke-output/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.db-shm
+*.db-wal
+本地数据/
+数据备份/
