@@ -52,6 +52,12 @@ module.exports=async function qa(api){
   }
   try{
     api.mutate(state=>{state.preferences.soundEnabled=false;state.preferences.notifications=false;state.tasks[0].priorityDate=new Date().toLocaleDateString('en-CA');state.habits.forEach(h=>h.active=false);});
+    check('habit interval input accepts one minute',await run(`document.querySelector('#habitInterval').min==='1'`));
+    const habitBefore=Date.now();
+    await run(`window.doneAPI.addHabit({title:'一分钟间隔验收',scheduleType:'interval',intervalMinutes:1})`);
+    const shortHabit=api.state().habits.at(-1);
+    check('one-minute habit is scheduled without a hidden five-minute clamp',shortHabit.intervalMinutes===1&&Date.parse(shortHabit.nextReminderAt)>=habitBefore+60000&&Date.parse(shortHabit.nextReminderAt)<=Date.now()+60000);
+    api.mutate(state=>{state.habits.find(h=>h.id===shortHabit.id).active=false;});
     for(const theme of ['bg1','bg2','bg3','bg4','bg5','bg6']){
       await run(`window.doneAPI.updatePreferences({themeId:'${theme}'})`);await wait(200);await shot('today-'+theme);
       const bounds=await run(`({x:document.documentElement.scrollWidth>innerWidth,y:document.documentElement.scrollHeight>innerHeight,theme:document.documentElement.dataset.themeId})`);

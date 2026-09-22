@@ -232,7 +232,7 @@ function prepareHabitReminder(habit, reset = false) {
   habit.title = String(habit.title || "每日习惯").trim().slice(0, 80) || "每日习惯";
   habit.icon = habitIcon(habit.title, habit.icon);
   habit.scheduleType = habit.scheduleType === "daily" ? "daily" : "interval";
-  habit.intervalMinutes = Math.min(1_440, Math.max(5, Number(habit.intervalMinutes) || 60));
+  habit.intervalMinutes = Math.min(1_440, Math.max(1, Number(habit.intervalMinutes) || 60));
   habit.time = /^\d{2}:\d{2}$/.test(String(habit.time || "")) ? habit.time : "08:00";
   if(!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(habit.time))throw Error('请填写有效的 24 小时时间');
   if(reset && habit.active!==false && (!habit.days.length || (habit.scheduleType==='daily' && !diary.nextHabit(habit))))throw Error('所选提醒时间不在启用的日期或时段内，请调整后保存');

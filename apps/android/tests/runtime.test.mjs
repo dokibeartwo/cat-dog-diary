@@ -134,6 +134,26 @@ test('dismissed event and focus reminders stay dismissed across arbitrary rebuil
   }finally{close();}
 });
 
+test('one-minute habit schedules in one minute and waits for acknowledgement before restarting',async t=>{
+  const {db,reminders,deliveries,close}=loadServices();let now=Date.parse('2026-09-22T13:00:00+08:00');t.mock.method(Date,'now',()=>now);
+  try{
+    await db.saveEntity('habit',{id:'short',title:'One minute',active:true,scheduleType:'interval',intervalMinutes:1});
+    await reminders.rebuildReminders();
+    assert.equal(Date.parse(reminders.reminderRows()[0].at),now+60000);
+    assert.equal(deliveries[0].trigger.date.getTime(),now+60000);
+    now+=65000;await reminders.rebuildReminders();
+    assert.equal(reminders.reminderRows()[0].pending,true);
+    const occurrence=structuredClone(reminders.reminderRows()[0]);
+    now+=65000;await reminders.rebuildReminders();
+    assert.equal(reminders.reminderRows()[0].at,occurrence.at);
+    assert.equal(deliveries.length,1);
+    await reminders.handleReminder('habit:short','ack',10,occurrence);
+    assert.equal(Date.parse(reminders.reminderRows()[0].at),now+60000);
+    assert.equal(deliveries.length,2);
+    assert.equal(deliveries[1].trigger.date.getTime(),now+60000);
+  }finally{close();}
+});
+
 test('a delayed rebuild cannot overwrite acknowledgement; repeated clicks keep the next occurrence intact',async t=>{
   const {db,reminders,notifications,close}=loadServices();let now=Date.now();t.mock.method(Date,'now',()=>now);
   try{

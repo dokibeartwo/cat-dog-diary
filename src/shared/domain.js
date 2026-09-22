@@ -266,7 +266,7 @@
       if (target.getTime() <= nowMs + 1_000) target.setDate(target.getDate() + 1);
       return target.toISOString();
     }
-    const intervalMinutes = Math.min(1_440, Math.max(5, Number(habit.intervalMinutes) || 60));
+    const intervalMinutes = Math.min(1_440, Math.max(1, Number(habit.intervalMinutes) || 60));
     return new Date(nowMs + intervalMinutes * 60_000).toISOString();
   }
 

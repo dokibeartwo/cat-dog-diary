@@ -392,7 +392,7 @@ function habitMarkup(habit) {
   const completedToday = habit.lastCompletedAt && domain.isSameDay(habit.lastCompletedAt, new Date());
   const scheduleControl = habit.scheduleType === "daily"
     ? `<label>每天 <input type="time" value="${escapeHtml(habit.time || "08:00")}" data-habit-field="time" aria-label="${escapeHtml(habit.title)}提醒时间" /></label>`
-    : `<label>每 <input type="number" min="5" max="1440" value="${Number(habit.intervalMinutes) || 60}" data-habit-field="intervalMinutes" aria-label="${escapeHtml(habit.title)}提醒间隔" /> 分钟</label>`;
+    : `<label>每 <input type="number" min="1" max="1440" value="${Number(habit.intervalMinutes) || 60}" data-habit-field="intervalMinutes" aria-label="${escapeHtml(habit.title)}提醒间隔" /> 分钟</label>`;
   return `
     <article class="habit-card ${habit.active ? "" : "is-paused"} ${completedToday ? "is-complete-today" : ""}" data-habit-id="${habit.id}">
       <button class="habit-complete" data-habit-action="complete" title="记录这一次完成">${escapeHtml(habit.icon || "✦")}</button>

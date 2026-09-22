@@ -114,6 +114,16 @@ test("a daily habit rolls over to tomorrow after today's time passes", () => {
   assert.equal(next, new Date("2026-09-05T08:00:00").toISOString());
 });
 
+test("habit intervals honor the displayed one-minute minimum", () => {
+  const now = new Date("2026-09-22T13:00:00");
+  for (const minutes of [1, 2, 5, 30, 1440]) {
+    assert.equal(
+      Date.parse(domain.calculateNextHabitReminderAt({active:true,scheduleType:'interval',intervalMinutes:minutes}, now)),
+      now.getTime() + minutes * 60000
+    );
+  }
+});
+
 test("deadline startup reminders respect configurable lead days and only fire once per day", () => {
   const now = new Date("2026-09-04T09:00:00");
   const task = { completed: false, deadlineDate: "2026-09-07", deadlineReminderDays: 3 };

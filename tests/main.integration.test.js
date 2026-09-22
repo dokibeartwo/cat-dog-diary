@@ -149,6 +149,19 @@ test('main IPC rejects invalid input without partially changing the saved task',
   assert.equal(h.api.get().tasks[0].title, task.title);
   assert.equal(h.api.get().tasks[0].reminderMinutes, 30);
 });
+
+test('Windows habit save and restart preserve a one-minute interval', () => {
+  const h=harness();
+  const before=Date.now();
+  const habit=h.ipc('habit:add',{title:'一分钟提醒',scheduleType:'interval',intervalMinutes:1}).habits.at(-1);
+  assert.equal(habit.intervalMinutes,1);
+  assert.ok(Date.parse(habit.nextReminderAt)>=before+60000);
+  assert.ok(Date.parse(habit.nextReminderAt)<=Date.now()+60000);
+  const restarted=harness({saved:h.writes.at(-1)});
+  const restored=restarted.api.get().habits.find(item=>item.id===habit.id);
+  assert.equal(restored.intervalMinutes,1);
+  assert.equal(restored.nextReminderAt,habit.nextReminderAt);
+});
 test('completed or deleted task invalidates its currently visible alert', () => {
   for (const action of ['task:toggle', 'task:delete']) {
     const h = harness(); const task = interval(h);
