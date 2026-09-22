@@ -2,9 +2,9 @@
 
 一款本地优先的 Windows 待办、提醒与番茄钟应用。它把“随手记下来、按时提醒、专心做完”放在同一个界面里，并保留六套猫狗主题、全屏提醒和透明桌面小组件。
 
-> Windows 稳定版：**1.0.0** · Android 同步内测：**1.1.0-beta.3** · 默认本地优先 · 无遥测
+> Windows 稳定版：**1.0.0** · 离线内测：**Android 0.1.1 / Windows 1.1.0-beta.3** · 本地优先 · 无遥测
 
-[下载 1.0.0](https://github.com/dokibeartwo/cat-dog-diary/releases/tag/v1.0.0)　·　[使用说明](使用说明.md)　·　[隐私说明](PRIVACY.md)　·　[同步内测进展](RELEASE-1.1.0-BETA.3.md)　·　[1.0.0版本说明](RELEASE-1.0.0.md)
+[下载 Windows 稳定版](https://github.com/dokibeartwo/cat-dog-diary/releases/tag/v1.0.0)　·　[下载 Android / Windows 离线内测](https://github.com/dokibeartwo/cat-dog-diary/releases/tag/v1.1.0-beta.3)　·　[使用说明](使用说明.md)　·　[隐私说明](PRIVACY.md)　·　[内测版本说明](RELEASE-1.1.0-BETA.3.md)
 
 ![猫狗日记今天工作台](docs/screenshots/today.png)
 
@@ -67,6 +67,10 @@ Windows 版在未配置同步时不联网，不需要注册账号，也不会上
 公开仓库和 Release 不包含作者的真实任务、AppData、备份、诊断日志或私人截图。更多信息见 [PRIVACY.md](PRIVACY.md)。
 
 ## Android 与跨设备同步内测
+
+**给自己和朋友试用：** [下载安卓 APK](https://github.com/dokibeartwo/cat-dog-diary/releases/download/v1.1.0-beta.3/cat-dog-diary-android-0.1.1-internal.apk)，然后阅读[离线内测说明](OFFLINE-BETA.md)。这是调试签名的内测 APK，不是正式商店发行版；后台强制全屏与所有手机省电模式不作保证。
+
+<img src="docs/screenshots/android/today.png" width="250" alt="安卓今天页面" /> <img src="docs/screenshots/android/focus.png" width="250" alt="安卓番茄钟" /> <img src="docs/screenshots/android/settings.png" width="250" alt="安卓主题与提醒设置" />
 
 目前先交付**离线内测**，无需创建 Supabase 项目或登录。手机任务和提醒保存在本机；暂不进行电脑与手机自动同步。Windows 内测包与稳定版数据隔离，双击后在程序文件夹旁创建“本地数据”（放在 E 盘就保存在 E 盘）；更新时保留该目录，里面的数据及备份不上传 GitHub。稳定版原数据目录和快捷方式不变。
 
