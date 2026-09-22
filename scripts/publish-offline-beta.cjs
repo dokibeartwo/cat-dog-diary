@@ -1,5 +1,6 @@
-// Explicit maintainer command only. Never changes the stable release or deletes assets.
-// node scripts/publish-offline-beta.cjs verify|stage|publish <successful-smoke-run>
+// Explicit maintainer command only. Never changes the stable release.
+// refresh-draft may replace only two known unpublished candidates, kept locally.
+// node scripts/publish-offline-beta.cjs verify|stage|refresh-draft|publish <successful-smoke-run>
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
@@ -17,11 +18,12 @@ async function hash(file) {
 }
 async function main() {
   const [command, smokeRun] = process.argv.slice(2);
-  if (!['verify', 'stage', 'publish'].includes(command) || !/^\d+$/.test(smokeRun || '')) throw Error('Expected verify|stage|publish <successful-smoke-run>');
+  if (!['verify', 'stage', 'refresh-draft', 'publish'].includes(command) || !/^\d+$/.test(smokeRun || '')) throw Error('Expected verify|stage|refresh-draft|publish <successful-smoke-run>');
   const folder = path.join(root, 'release', `android-ci-${smokeRun}`, 'diagnostics');
   const report = JSON.parse(fs.readFileSync(path.join(folder, 'result.json'), 'utf8'));
   const provenance = JSON.parse(fs.readFileSync(path.join(folder, 'apk-provenance.json'), 'utf8'));
   const required = ['offline-task-created', 'offline-task-survives-process-restart', 'focus-start', 'focus-pause', 'paused-focus-survives-restart', ...[1,2,3,4,5,6].map(n => `theme-${n}-usable`)];
+  if (['publish','refresh-draft'].includes(command)) required.push('numeric-input-visible-above-keyboard','notification-permission-granted','foreground-reminder-delivered','unhandled-interval-keeps-same-occurrence','acknowledgement-restarts-interval','background-system-notification-delivered','habit-paused');
   if (report.passed !== true || required.some(check => !report.checks.includes(check))) throw Error('Installed APK acceptance is incomplete');
   if (String(provenance.apkSourceRun) !== sourceRun || provenance.apkSourceSha !== sourceSha) throw Error('Tested APK provenance differs');
   if (fs.readFileSync(path.join(folder, 'APK-SHA256.txt'), 'utf8').split(/\s/)[0] !== apkHash) throw Error('Tested APK checksum differs');
@@ -46,7 +48,7 @@ async function main() {
   const api = async (route, method='GET', data) => {
     const response = await fetch(`https://api.github.com/repos/${repo}/${route}`,{method,headers:{...headers,'Content-Type':'application/json'},body:data ? JSON.stringify(data) : undefined,signal:AbortSignal.timeout(30000)});
     if (!response.ok) throw Error(`GitHub API ${method} ${route}: ${response.status}`);
-    return response.json();
+    return response.status===204?null:response.json();
   };
   const run = await api(`actions/runs/${smokeRun}`);
   if (run.conclusion !== 'success' || run.head_repository?.full_name !== repo || run.path !== '.github/workflows/android-native.yml' || run.head_sha !== provenance.smokeSha) throw Error('GitHub acceptance run is not successful or has changed provenance');
@@ -63,7 +65,16 @@ async function main() {
   };
   for (const item of files) {
     const existing = release.assets.find(asset=>asset.name===item.name);
-    if (existing) { validateAsset(existing,item); console.log(`Verified existing asset: ${item.name}`); continue; }
+    if (existing) {
+      const superseded={
+        'cat-dog-diary-android-0.1.1-internal.apk':'af144f9f6ea4052a8668cbfa8f39f8497aef90f96e3f772fb76c169ccd6d05f6',
+        'SHA256SUMS.txt':'9c89eba620276b692bb497f19b6489a63b8055696d611f0f5e8b161aeb00570e'
+      };
+      if(command==='refresh-draft'&&release.draft&&existing.digest===`sha256:${superseded[item.name]}`&&existing.digest!==`sha256:${item.sha256}`){
+        await api(`releases/assets/${existing.id}`,'DELETE');
+        console.log(`Replaced unpublished candidate asset only: ${item.name}; previous local artifact retained.`);
+      }else{validateAsset(existing,item);console.log(`Verified existing asset: ${item.name}`);continue;}
+    }
     if (!release.draft) throw Error('Published release is missing an asset; refusing to mutate it');
     const url = new URL(release.upload_url.split('{')[0]);
     if (url.hostname !== 'uploads.github.com' || !url.pathname.startsWith(`/repos/${repo}/releases/`)) throw Error('Unexpected upload destination');
@@ -79,7 +90,7 @@ async function main() {
   }
   release=await api(`releases/${release.id}`);
   for(const item of files) {const asset=release.assets.find(a=>a.name===item.name);if(!asset)throw Error('Release asset missing');validateAsset(asset,item);}
-  if (release.draft && command === 'publish') release=await api(`releases/${release.id}`,'PATCH',{body,draft:false,prerelease:true,make_latest:'false'});
+  if (release.draft && command === 'publish') release=await api(`releases/${release.id}`,'PATCH',{body,target_commitish:commit,draft:false,prerelease:true,make_latest:'false'});
   console.log(JSON.stringify({published:!release.draft,prerelease:release.prerelease,url:release.html_url,assets:release.assets.map(a=>({name:a.name,url:a.browser_download_url,digest:a.digest}))},null,2));
 }
 main().catch(error=>{console.error(error.message);process.exitCode=1;});

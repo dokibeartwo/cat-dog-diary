@@ -18,7 +18,7 @@ async function main(){
   else if(process.argv[2]==='dispatch'){await api('actions/workflows/android-native.yml/dispatches','POST',{ref:'main'});console.log('Android workflow dispatched.');}
   else if(process.argv[2]==='status'){
     const id=process.argv[3];
-    if(id){const run=await api(`actions/runs/${id}`),jobs=await api(`actions/runs/${id}/jobs`);console.log(JSON.stringify({id:run.id,status:run.status,conclusion:run.conclusion,url:run.html_url,jobs:jobs.jobs.map(j=>({name:j.name,status:j.status,conclusion:j.conclusion,steps:j.steps.map(s=>({name:s.name,status:s.status,conclusion:s.conclusion}))}))},null,2));}
+    if(id){const run=await api(`actions/runs/${id}`),jobs=await api(`actions/runs/${id}/jobs`);console.log(JSON.stringify({id:run.id,status:run.status,conclusion:run.conclusion,startedAt:run.run_started_at,url:run.html_url,jobs:jobs.jobs.map(j=>({name:j.name,status:j.status,conclusion:j.conclusion,steps:j.steps.map(s=>({name:s.name,status:s.status,conclusion:s.conclusion,startedAt:s.started_at,completedAt:s.completed_at}))}))},null,2));}
     else{const runs=await api('actions/workflows/android-native.yml/runs?per_page=3');console.log(JSON.stringify(runs.workflow_runs.map(r=>({id:r.id,status:r.status,conclusion:r.conclusion,url:r.html_url,sha:r.head_sha})),null,2));}
   }else if(process.argv[2]==='logs'){
     const jobs=await api(`actions/runs/${process.argv[3]}/jobs`),job=jobs.jobs.find(j=>j.conclusion==='failure')||jobs.jobs[0];
@@ -70,11 +70,28 @@ async function main(){
       const file=path.join(folder,artifact.name+'.zip');
       if(fs.existsSync(file)){console.log(JSON.stringify({artifact:artifact.name,file,existing:true}));continue;}
       console.log(JSON.stringify({artifact:artifact.name,downloading:true,expectedBytes:artifact.size_in_bytes}));
-      const response=await fetch(`https://api.github.com/repos/${repository}/actions/artifacts/${artifact.id}/zip`,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(600000)});
-      if(!response.ok)throw Error(`Artifact download failed: ${response.status}`);
-      const partial=file+`.${Date.now()}.partial`,fd=fs.openSync(partial,'wx'),digest=crypto.createHash('sha256');let bytes=0,lastReport=Date.now();
-      try{for await(const chunk of response.body){bytes+=chunk.length;if(bytes>512*1024*1024)throw Error('Artifact exceeds download limit');digest.update(chunk);fs.writeFileSync(fd,chunk);if(Date.now()-lastReport>15000){console.log(JSON.stringify({artifact:artifact.name,downloadedBytes:bytes}));lastReport=Date.now();}}fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+      if(!Number.isSafeInteger(artifact.size_in_bytes)||artifact.size_in_bytes<1||artifact.size_in_bytes>512*1024*1024)throw Error('Artifact exceeds download limit');
+      const redirect=await fetch(`https://api.github.com/repos/${repository}/actions/artifacts/${artifact.id}/zip`,{headers:{Authorization:`Bearer ${token}`},redirect:'manual',signal:AbortSignal.timeout(30000)});
+      const location=new URL(redirect.headers.get('location'));
+      if(location.protocol!=='https:'||!location.hostname.endsWith('.blob.core.windows.net'))throw Error('Unexpected artifact storage');
+      // Bounded ranges avoid one slow blob connection blocking the entire APK.
+      // Only rename after every byte and the server's full SHA-256 agree.
+      const partial=file+`.${Date.now()}.partial`,fd=fs.openSync(partial,'wx'),stop=new AbortController();
+      const block=1024*1024;let next=0,bytes=0,lastReport=Date.now();
+      const worker=async()=>{while(next<artifact.size_in_bytes){
+        const start=next,end=Math.min(start+block,artifact.size_in_bytes)-1;next=end+1;
+        const response=await fetch(location,{headers:{Range:`bytes=${start}-${end}`},signal:AbortSignal.any([stop.signal,AbortSignal.timeout(180000)])});
+        if(response.status!==206){await response.body?.cancel();throw Error(`Artifact range failed: ${response.status}`);}
+        if(response.headers.get('content-range')!==`bytes ${start}-${end}/${artifact.size_in_bytes}`)throw Error('Artifact range boundaries differ');
+        const content=Buffer.from(await response.arrayBuffer());if(content.length!==end-start+1)throw Error('Truncated artifact block');
+        let written=0;while(written<content.length)written+=fs.writeSync(fd,content,written,content.length-written,start+written);
+        bytes+=content.length;if(Date.now()-lastReport>15000){console.log(JSON.stringify({artifact:artifact.name,downloadedBytes:bytes}));lastReport=Date.now();}
+      }};
+      const workers=Array.from({length:4},()=>worker().catch(error=>{stop.abort();throw error;}));
+      try{const results=await Promise.allSettled(workers);const failed=results.find(r=>r.status==='rejected');if(failed)throw failed.reason;fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+      const digest=crypto.createHash('sha256');for await(const chunk of fs.createReadStream(partial))digest.update(chunk);
       const hash=digest.digest('hex');
+      if(bytes!==artifact.size_in_bytes)throw Error('Artifact size differs');
       if(artifact.digest&&artifact.digest!==`sha256:${hash}`)throw Error('Artifact SHA-256 mismatch');
       fs.renameSync(partial,file);console.log(JSON.stringify({artifact:artifact.name,file,bytes,sha256:hash}));
     }

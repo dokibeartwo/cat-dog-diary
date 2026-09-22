@@ -50,12 +50,29 @@ jobs:
       - name: Compile self-contained internal APK
         if: ${{ !inputs.apk_run_id }}
         working-directory: apps/android/android
+        timeout-minutes: 22
+        env:
+          NODE_ENV: production
+          CMAKE_BUILD_PARALLEL_LEVEL: '2'
         # Expo template signs release with its debug key unless an owner key
         # is explicitly configured. This artifact is INTERNAL, not a stable
         # public release. It embeds JS and does not need a Metro dev server.
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a,x86_64
+          mkdir -p ../smoke-output
+          free -m
+          df -h .
+          ./gradlew assembleRelease --no-daemon --no-parallel --max-workers=2 --console=plain --info --stacktrace -PreactNativeArchitectures=arm64-v8a,x86_64 2>&1 | tee ../smoke-output/native-build.log
+      - name: Native build failure diagnostics
+        if: ${{ failure() && !inputs.apk_run_id }}
+        run: |
+          mkdir -p apps/android/smoke-output
+          {
+            date -u
+            free -m
+            df -h .
+            ps -eo pid,comm,pcpu,pmem,rss --sort=-rss | head -25
+          } > apps/android/smoke-output/build-resources.txt
       - name: Upload internal APK
         if: ${{ !inputs.apk_run_id }}
         uses: actions/upload-artifact@v4
