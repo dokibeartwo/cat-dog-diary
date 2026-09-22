@@ -18,7 +18,7 @@ import {readFocus,startFocus,toggleFocus,finishFocus,remaining,renewFocusLease,t
 const rules=require('../../packages/core/src/mobile-rules');
 const diary=require('../../src/shared/diary-v1');
 type Tab='today'|'tasks'|'habits'|'focus'|'reminders'|'settings';
-const backgrounds:Record<ThemeId,ImageSourcePropType>={bg1:require('./assets/themes/bg1-main.png'),bg2:require('./assets/themes/bg2-main.png'),bg3:require('./assets/themes/bg3-main.png'),bg4:require('./assets/themes/bg4-main.png'),bg5:require('./assets/themes/bg5-main.png'),bg6:require('./assets/themes/bg6-main.png')};
+const backgrounds:Record<ThemeId,ImageSourcePropType>={bg1:require('./assets/themes/bg1-main.jpg'),bg2:require('./assets/themes/bg2-main.jpg'),bg3:require('./assets/themes/bg3-main.jpg'),bg4:require('./assets/themes/bg4-main.jpg'),bg5:require('./assets/themes/bg5-main.jpg'),bg6:require('./assets/themes/bg6-main.jpg')};
 const labels:Record<FocusMode,string>={focus:'自由专注',shortBreak:'短休',longBreak:'长休'};
 const errorText=(e:unknown)=>e instanceof Error?e.message:String(e);
 

@@ -4,7 +4,7 @@ import {SafeAreaView} from 'react-native-safe-area-context';
 import {Button,useTheme} from './ui';
 import {getMeta,setMeta} from './services/local-db';
 import type {Reminder} from './services/notifications';
-const screens=[require('../assets/screens/screen1.png'),require('../assets/screens/screen2.png'),require('../assets/screens/screen3.png'),require('../assets/screens/screen4.png')];
+const screens=[require('../assets/screens/screen1.jpg'),require('../assets/screens/screen2.jpg'),require('../assets/screens/screen3.jpg'),require('../assets/screens/screen4.jpg')];
 export function ReminderScreen({reminder,busy,onAction}:{reminder:Reminder|null;busy:boolean;onAction:(action:'ack'|'snooze',complete?:boolean)=>void}) {
   const theme=useTheme(),[screen,setScreen]=useState(0);
   const identity=reminder?`${reminder.key}:${reminder.at}`:'';
