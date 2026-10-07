@@ -1,0 +1,10 @@
+node_modules/
+node_modules.av-rollback-backup-*/
+public/assets/
+public/shared/
+dist/
+test-results/
+playwright-report/
+*.log
+artifacts/
+.preview-runtime/

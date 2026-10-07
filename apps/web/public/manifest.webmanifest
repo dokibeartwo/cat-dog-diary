@@ -1,0 +1,15 @@
+{
+  "id": "./",
+  "name": "猫狗日记 · 手机预览",
+  "short_name": "猫狗日记",
+  "description": "待办、提醒与番茄钟的手机交互预览，仅使用本浏览器示例数据。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fff7d4",
+  "theme_color": "#fff7d4",
+  "icons": [
+    {"src": "./assets/icon.png", "sizes": "1254x1254", "type": "image/png", "purpose": "any"}
+  ]
+}

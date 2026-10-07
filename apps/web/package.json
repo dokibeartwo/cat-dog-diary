@@ -1,0 +1,17 @@
+{
+  "name": "cat-dog-diary-web-preview",
+  "version": "0.1.0-preview",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare:assets": "node scripts/prepare-assets.cjs",
+    "dev": "npm run prepare:assets && vite --host 127.0.0.1",
+    "build": "npm run prepare:assets && tsc --noEmit && vite build && node scripts/audit-dist.cjs",
+    "audit:dist": "node scripts/audit-dist.cjs",
+    "preview": "node scripts/serve.cjs",
+    "test": "tsx --test tests/model.test.ts",
+    "test:ui": "playwright test"
+  },
+  "dependencies": {"react": "19.1.0", "react-dom": "19.1.0"},
+  "devDependencies": {"@types/react": "^19.1.0", "@types/react-dom": "^19.1.0", "typescript": "~5.9.2", "vite": "8.3.3", "@playwright/test": "1.63.0", "tsx": "^4.20.0", "@types/node": "^24.0.0", "esbuild": "0.28.2"}
+}
