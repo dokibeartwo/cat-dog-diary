@@ -8,8 +8,9 @@
     "dev": "npm run prepare:assets && vite --host 127.0.0.1",
     "build": "npm run prepare:assets && tsc --noEmit && vite build && node scripts/audit-dist.cjs",
     "audit:dist": "node scripts/audit-dist.cjs",
+    "check:cloud-config": "node scripts/check-cloud-config.cjs",
     "preview": "node scripts/serve.cjs",
-    "test": "tsx --test tests/model.test.ts",
+    "test": "tsx --test tests/model.test.ts && node --test tests/cloud-config.test.cjs",
     "test:ui": "playwright test"
   },
   "dependencies": {"react": "19.1.0", "react-dom": "19.1.0"},

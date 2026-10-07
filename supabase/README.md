@@ -4,6 +4,8 @@
 
 ## 部署
 
+手机网页版的首次配置请先阅读 [网页同步接入说明](网页同步接入说明.md)。可用 `node supabase/scripts/prepare-bootstrap.cjs` 生成仅供专用新项目使用的整份初始化 SQL，再用 `check-readiness.sql` 做只读检查。网页目前仍为示例预览，配置文件不会自动接通登录或同步。
+
 1. 创建 Supabase 项目，启用邮箱认证。邮件模板用 `{{ .Token }}` 显示验证码，不要只发送 magic link。公开内测前配置自己的 SMTP 并检查投递限制。
 2. CLI 关联项目后执行 `supabase db push`，按时间顺序部署 `migrations` 全部文件；旧项目也要执行后续迁移，不要只运行第一份。
 3. 把项目 URL 和 publishable/anon key 放在本机环境变量或未提交的 `.env.local` 中。不要把 service-role key 放进 APK、EXE 或 Git。
@@ -22,6 +24,7 @@
 ## 安全边界
 
 - 迁移中没有真实项目 URL、token 或 service-role key。
+- 2026-10-07 的迁移对六张应用表先收回客户端既有权限，再只授予所需权限，补齐 TRUNCATE 等不受 RLS 行策略保护的操作；不改写现有任务数据。
 - `sync_*`、习惯事件和设备会话表均启用 RLS；普通客户端不能直接写入同步表，写入必须走 RPC 的 revision 检查。
 - `delete_account` 会让当前登录会话失效。正式部署前请在测试项目验证 Auth 删除权限；如果项目策略禁止 SQL 删除 `auth.users`，应改为受保护的 Supabase Edge Function，并保留同样的调用权限。
 - 任务正文、备注和习惯内容属于用户数据。公开 GitHub 仓库只包含 schema，不包含任何用户数据、导出文件或私有配置。
