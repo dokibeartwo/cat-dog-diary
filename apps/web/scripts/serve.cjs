@@ -3,9 +3,11 @@ const root=path.resolve(__dirname,'../dist'),port=Number(process.env.PORT||4173)
 const mount=process.env.MOUNT_PATH||'/';
 if(!/^\/(?:[a-zA-Z0-9_-]+\/)*$/.test(mount))throw Error('MOUNT_PATH must start and end with /');
 if(!fs.existsSync(path.join(root,'index.html')))throw Error('Run npm run build first');
+const connections=fs.readFileSync(path.join(root,'index.html'),'utf8').match(/connect-src 'self'(?: https:\/\/[a-z0-9]{20}\.supabase\.co)?;/)?.[0];
+if(!connections)throw Error('Invalid connection policy in the built site');
 const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.png':'image/png','.jpg':'image/jpeg','.svg':'image/svg+xml','.json':'application/json','.webmanifest':'application/manifest+json'};
 http.createServer((req,res)=>{
-  const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self';"};
+  const headers={'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; "+connections+" object-src 'none'; base-uri 'none'; frame-ancestors 'self'; form-action 'self';"};
   if(!['GET','HEAD'].includes(req.method)){res.writeHead(405,headers);res.end();return;}
   let requested;try{requested=decodeURIComponent(new URL(req.url,'http://localhost').pathname);}catch{res.writeHead(400,headers);res.end();return;}
   if(requested.includes('\\')||requested.includes('\0')||requested.split('/').some(x=>x.startsWith('.'))){res.writeHead(403,headers);res.end();return;}
@@ -18,5 +20,5 @@ http.createServer((req,res)=>{
 }).listen(port,host,()=>{
   console.log(`Computer: http://localhost:${port}${mount}`);
   if(host==='0.0.0.0')for(const entries of Object.values(os.networkInterfaces()))for(const n of entries||[])if(n.family==='IPv4'&&!n.internal)console.log(`Same-Wi-Fi candidate: http://${n.address}:${port}${mount}`);
-  console.log('Serving only the built preview. No Windows task data, filesystem API, auth or cloud services.');
+  console.log('Serving only the built site. No Windows task data or filesystem API. Account connections use only the configured project.');
 });

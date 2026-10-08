@@ -1,6 +1,6 @@
 import {D,Diary,P,R} from './rules';
 export type Task={id:string;title:string;completed:boolean;steps:any[];[key:string]:any};
-export type State={version:1;preview:true;revision:number;theme:string;tasks:Task[];habits:any[];pendingReminders:any[];reminderHistory:any[];focusTimer:any;focusHistory:any[];preferences:any;presence:any;stage:any;trash:any[];lastScreen:number};
+export type State={version:1;preview:boolean;datasetKind?:'personal';habitEvents?:any[];categories?:any[];revision:number;theme:string;tasks:Task[];habits:any[];pendingReminders:any[];reminderHistory:any[];focusTimer:any;focusHistory:any[];preferences:any;presence:any;stage:any;trash:any[];lastScreen:number};
 export type Command={type:string;[key:string]:any};
 export const date=(value:Date|number=new Date())=>D.toLocalDateInput(new Date(value));
 export const id=()=>`preview-${Date.now().toString(36)}-${Array.from(crypto.getRandomValues(new Uint32Array(2)),n=>n.toString(36)).join('')}`;
@@ -16,6 +16,9 @@ export function seed(now=Date.now()):State{
   for(const t of tasks)t.nextReminderAt=t.reminderActive?D.calculateNextReminderAt(t,new Date(now)):null;
   const habits=[{id:'habit-water',title:'喝水，起来走走',icon:'water',intervalMinutes:60},{id:'habit-rest',title:'放松眼睛和肩颈',icon:'leaf',intervalMinutes:45}].map(h=>({...h,scheduleType:'interval',time:'08:00',active:false,completionCount:0,reminderPresentation:'fullscreen',days:[0,1,2,3,4,5,6],windowEnabled:false,windowStart:'09:00',windowEnd:'18:00',nextReminderAt:null}));
   return {version:1,preview:true,revision:0,theme:'bg1',tasks,habits,pendingReminders:[],reminderHistory:[],focusTimer:R.normalizeFocus(),focusHistory:[],preferences:{...Diary.preferences(),notificationEnabled:false,reminderInterval:30},presence:{active:false},stage:{start:date(now),end:addDays(14,now),dailyCapacity:3,dailyMinutes:120,workdaysOnly:false},trash:[],lastScreen:0};
+}
+export function personalSeed(now=Date.now()):State{
+  return {...seed(now),preview:false,datasetKind:'personal',tasks:[],habits:[],habitEvents:[]};
 }
 function finishTask(s:State,t:Task,completed:boolean,now:number){
   if(t.completed===completed)return;
@@ -90,6 +93,7 @@ export function apply(input:State,cmd:Command,now=Date.now()):State{
       else if(cmd.action==='start'&&f.status==='paused'){R.updateFocus(f,{action:'start'},now);f.activeStartedAt=new Date(now).toISOString();}
       else if(cmd.action==='stop'){P.recordSession(s,'interrupted',now);R.updateFocus(f,{action:'stop'},now);}
       else if(cmd.action==='select')R.updateFocus(f,{action:'select',mode:cmd.mode,durationMinutes:cmd.minutes},now);
+      if(cmd.newSessionId&&f.status==='running')f.sessionId=cmd.newSessionId;
       break;
     }
     case 'presence':s.presence=cmd.status?{active:true,status:D.normalizePresenceStatus(cmd.status),startedAt:new Date(now).toISOString(),screenId:screen(s)}:{active:false};break;
@@ -111,8 +115,8 @@ export function apply(input:State,cmd:Command,now=Date.now()):State{
       for(const change of cmd.plan.updates){const task=s.tasks.find(t=>t.id===change.id);if(task){Object.assign(task,change);task.nextReminderAt=task.reminderActive?D.calculateNextReminderAt(task,new Date(now)):null;}}
       s.stage={...cmd.stage};break;
     }
-    case 'reset':return seed(now);
-    case 'import':return validateBackup(cmd.data);
+    case 'reset':if(!input.preview)throw Error('个人清单不能重置为示例');return seed(now);
+    case 'import':if(!input.preview)throw Error('个人清单不接受示例备份');return validateBackup(cmd.data);
     default:throw Error('未支持的预览操作');
   }
   R.reconcile(s);

@@ -9,3 +9,5 @@
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 .chips button.active,.check.checked,.bottom-nav button.active>span,.calendar-grid>button.selected,.time-grid button.selected,.weekdays button.selected{color:var(--on-secondary,#fff)}
 .task-card>.icon-btn{width:48px;flex-basis:48px}.number-field button{width:48px;flex-basis:48px}.calendar-grid>button{min-height:48px}.time-grid>button{min-height:48px}.weekdays>button{min-height:48px}.mini-timer .icon-btn{width:44px;flex-basis:44px}
+/* Account sheets share the same theme and touch sizes as task editors. */
+.account-panel{display:grid;gap:16px}.account-panel form{display:grid;gap:14px}.account-email{overflow-wrap:anywhere;font-weight:700}.conflict-card{background:var(--soft);border:1px solid var(--secondary);border-radius:20px;padding:18px;margin-block:12px}.conflict-card p{white-space:pre-wrap;overflow-wrap:anywhere}.preview-about{display:block;margin:4px 16px 0 auto;background:transparent;color:var(--muted);border:0;min-height:32px;font-size:13px}

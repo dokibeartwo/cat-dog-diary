@@ -19,6 +19,10 @@ jobs:
     defaults:
       run:
         working-directory: apps/web
+    # Public client configuration only. Never set service_role/secret keys here.
+    env:
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -28,13 +32,15 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - name: Install locked dependencies without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Test example-data rules
+      - name: Validate required public cloud configuration
+        run: npm run check:cloud-config -- --require
+      - name: Test demo isolation and personal synchronization rules
         run: npm test
       - name: Build and audit static files
         run: npm run build
       - name: Install test browser
         run: npx playwright install --with-deps chromium
-      - name: Verify the public project path and real interactions
+      - name: Verify project path and interactions with intercepted cloud requests
         run: npm run test:ui
       - uses: actions/upload-pages-artifact@v4
         with:
@@ -51,6 +57,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Deploy verified example-data site
+      - name: Deploy verified mobile web beta
         id: deployment
         uses: actions/deploy-pages@v4

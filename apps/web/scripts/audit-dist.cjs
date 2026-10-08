@@ -4,7 +4,7 @@ const root=path.resolve(__dirname,'../dist');
 const exact=new Set(['index.html','.nojekyll','manifest.webmanifest','assets/bear.png','assets/icon.png',
  ...Array.from({length:6},(_,i)=>'assets/themes/bg'+(i+1)+'.jpg'),
  ...Array.from({length:4},(_,i)=>'assets/screens/screen'+(i+1)+'.jpg'),
- ...['domain','diary-v1','productivity','runtime'].map(n=>'shared/'+n+'.js')]);
+ ...['domain','diary-v1','productivity','runtime','sync-core'].map(n=>'shared/'+n+'.js')]);
 const files=[];
 function walk(dir){
  for(const name of fs.readdirSync(dir)){

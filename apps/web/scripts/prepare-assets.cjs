@@ -8,4 +8,5 @@ copy('src/renderer/assets/bear-authenticity.png','assets/bear.png');
 copy('apps/android/assets/icon.png','assets/icon.png');
 for(const name of ['domain','diary-v1','productivity'])copy(`src/shared/${name}.js`,`shared/${name}.js`);
 require('esbuild').buildSync({entryPoints:[path.join(root,'src/shared/runtime.js')],outfile:path.join(target,'shared/runtime.js'),bundle:true,format:'iife',globalName:'PreviewRuntime',platform:'browser',alias:{'node:crypto':path.join(__dirname,'browser-crypto.cjs')}});
+require('esbuild').buildSync({entryPoints:[path.join(__dirname,'sync-core.cjs')],outfile:path.join(target,'shared/sync-core.js'),bundle:true,format:'iife',globalName:'DiarySyncCore',platform:'browser'});
 console.log('Approved assets and shared rules prepared. No private data copied.');
