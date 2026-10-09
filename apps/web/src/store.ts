@@ -7,6 +7,9 @@ const channels:BroadcastChannel[]=[];
 export const getSnapshot=()=>snapshot;
 export const getRecord=()=>record;
 export const activeDataset=()=>route;
+// During an asynchronous account switch the old snapshot may still be rendered.
+// Feedback must wait until the snapshot belongs to the requested partition.
+export const snapshotDataset=()=>appliedRoute;
 export const generation=()=>epoch;
 export const subscribe=(cb:()=>void)=>{listeners.add(cb);return()=>{listeners.delete(cb);};};
 const notify=()=>listeners.forEach(cb=>cb());

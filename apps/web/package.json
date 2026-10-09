@@ -10,7 +10,7 @@
     "audit:dist": "node scripts/audit-dist.cjs",
     "check:cloud-config": "node scripts/check-cloud-config.cjs",
     "preview": "node scripts/serve.cjs",
-    "test": "tsx --test tests/model.test.ts tests/sync-model.test.ts tests/auto-sync.test.ts && node --test tests/cloud-config.test.cjs",
+    "test": "tsx --test tests/model.test.ts tests/sync-model.test.ts tests/auto-sync.test.ts tests/reminder-feedback.test.ts && node --test tests/cloud-config.test.cjs",
     "test:ui": "playwright test"
   },
   "dependencies": {"@supabase/supabase-js":"2.116.0", "react": "19.1.0", "react-dom": "19.1.0"},
